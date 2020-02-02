@@ -15,11 +15,24 @@ case class CInductiveClause(name: String, selector: CExpr, asn: CExpr) extends P
   }
 }
 
-case class CInductivePredicate(name: String, params: Seq[(CoqType, CVar)], clauses: Seq[CInductiveClause]) extends PrettyPrinting {
+case class CInductivePredicate(name: String, params: CFormals, clauses: Seq[CInductiveClause]) extends PrettyPrinting {
   override def pp: String =
-    s"Inductive $name ${params.map(p => s"(${p._2.pp} : ${p._1.pp})").mkString(" ")} : Prop :=\n${clauses.map(_.pp).mkString("\n")}."
+    s"Inductive $name ${params.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")} : Prop :=\n${clauses.map(_.pp).mkString("\n")}."
 
   def refreshExistentials: CInductivePredicate = {
     CInductivePredicate(name, params, clauses.map(_.refreshExistentials(params.map(_._2).toSet)))
+  }
+}
+
+case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: CFormals, pre: CExpr, post: CExpr) extends PrettyPrinting {
+  override def pp: String = {
+    (""
+      + s"Definition ${name}_type :=\n"
+      + s"  forall ${params.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")},\n"
+      + s"    ${pureParams.map{ case (t, v) => s"{${v.pp} : ${t.pp}}" }.mkString(" ")},\n"
+      + s"    STsep (\n"
+      + s"      fun h => ${pre.pp},\n"
+      + s"      [vfun (_: ${rType.pp}) h => ${post.pp}])."
+      )
   }
 }

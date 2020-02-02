@@ -24,11 +24,31 @@ object Expressions {
           val acc2 = collector(acc1)(cond)
           val acc3 = collector(acc2)(l)
           collector(acc3)(r)
-        case CSApp(_, args, _) => args.foldLeft(acc)((acc, arg) => collector(acc)(arg))
+        case a@CSApp(_, args, _) =>
+          val acc1 = if (p(a)) acc + a.asInstanceOf[R] else acc
+          args.foldLeft(acc1)((acc, arg) => collector(acc)(arg))
         case _ => acc
       }
 
       collector(Set.empty)(this)
+    }
+
+    def simplify: CExpr = this match {
+      case CBinaryExpr(op, left, right) =>
+        if (op == COpAnd) {
+          if (left == CBoolConst(true)) return right.simplify
+          else if (right == CBoolConst(true)) return left.simplify
+        }
+        CBinaryExpr(op, left.simplify, right.simplify)
+      case CUnaryExpr(op, arg) =>
+        CUnaryExpr(op, arg.simplify)
+      case CSetLiteral(elems) =>
+        CSetLiteral(elems.map(e => e.simplify))
+      case CIfThenElse(cond, left, right) =>
+        CIfThenElse(cond.simplify, left.simplify, right.simplify)
+      case CSApp(pred, args, tag) =>
+        CSApp(pred, args.map(_.simplify), tag)
+      case other => other
     }
   }
 

@@ -68,9 +68,13 @@ object TranslationRunner extends SynthesisRunnerUtil {
       throw SynthesisException("Expected a single synthesis goal")
     }
 
-    val lseg = env.predicates("lseg")
-    val cLseg = Translator.runInductivePredicate(lseg.resolveOverloading(env))
+    val cPredicates = env.predicates.mapValues(pred => Translator.runInductivePredicate(pred.resolveOverloading(env)))
+    val cLseg = cPredicates("lseg")
     testPrintln(cLseg.pp)
+
+    val funSpec = specs.head
+    val cFunSpec = Translator.runFunSpec(funSpec.resolveOverloading(env), cPredicates)
+    testPrintln(cFunSpec.pp)
 
     val spec = specs.head
     val time1 = System.currentTimeMillis()

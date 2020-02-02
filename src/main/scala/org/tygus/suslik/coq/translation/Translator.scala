@@ -8,6 +8,26 @@ import org.tygus.suslik.language.Expressions._
 import org.tygus.suslik.logic.Specifications.Assertion
 
 object Translator {
+  def runFunSpec(el: FunSpec, predicateEnv: CPredicateEnv) : CFunSpec = {
+    val cParams = el.params.map(runParam)
+    def extractPureParams(e: CExpr): Set[(CoqType, CVar)] = {
+      val apps : Set[CSApp] = e.collect(_.isInstanceOf[CSApp])
+      apps
+        .flatMap(app => {
+          val vars: Set[CVar] = app.collect(_.isInstanceOf[CVar])
+          vars.zip(predicateEnv(app.pred).params).map {
+            case (currParam, sigParam) => (sigParam._1, currParam)
+          }
+        })
+        .filter(p => p._1 != CHeapType && !cParams.contains(p))
+    }
+    val cRType = runSSLType(el.rType)
+    val cPre = runAsn(el.pre).simplify
+    val cPost = runAsn(el.post).simplify
+    val pureParams = extractPureParams(cPre) ++ extractPureParams(cPost)
+    CFunSpec(el.name, cRType, cParams, pureParams.toList, cPre, cPost)
+  }
+
   def runInductivePredicate(el: InductivePredicate) : CInductivePredicate = {
     val cParams = el.params.map(runParam) :+ (CHeapType, CVar("h"))
     val cClauses = el.clauses.zipWithIndex.map { case (c, i) => runClause(s"${el.name}$i", c) }
@@ -48,7 +68,8 @@ object Translator {
     CBinaryExpr(COpAnd, runExpr(el.phi), runSFormula(el.sigma))
 
   private def runSFormula(el: SFormula): CExpr = {
-    val appsAux: Seq[CExpr] = el.apps.map(app => CSApp(app.pred, app.args.map(arg => runExpr(arg)) :+ CVar("h'"), app.tag))
+    val heapVarName = if (el.ptss.isEmpty) "h" else "h'"
+    val appsAux: Seq[CExpr] = el.apps.map(app => CSApp(app.pred, app.args.map(arg => runExpr(arg)) :+ CVar(heapVarName), app.tag))
     val apps: Option[CExpr] = appsAux match {
       case Nil => None
       case hd :: tl => Some(tl.foldLeft(hd)((e, acc) => CBinaryExpr(COpAnd, e, acc)))
