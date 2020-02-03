@@ -87,6 +87,7 @@ object TranslationRunner extends SynthesisRunnerUtil {
     sresult match {
       case Some((rr, stats)) =>
         val result = rr.pp
+        testPrintln(Translator.runProcedure(rr).ppp)
         if (params.printStats) {
           testPrintln(s"\n[$testName]:", Console.MAGENTA)
           testPrintln(params.pp)

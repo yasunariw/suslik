@@ -2,7 +2,7 @@ package org.tygus.suslik.coq.language
 
 object Expressions {
 
-  sealed abstract class CExpr extends PrettyPrinting {
+  sealed abstract class CExpr extends ProgramPrettyPrinting {
     def collect[R <: CExpr](p: CExpr => Boolean): Set[R] = {
 
       def collector(acc: Set[R])(exp: CExpr): Set[R] = exp match {
@@ -66,26 +66,32 @@ object Expressions {
 
   case class CSetLiteral(elems: List[CExpr]) extends CExpr {
     override def pp: String = if (elems.isEmpty) "nil" else s"[:: ${elems.map(_.pp).mkString("; ")}]"
+    override def ppp: String = if (elems.isEmpty) "nil" else s"[:: ${elems.map(_.ppp).mkString("; ")}]"
   }
 
   case class CIfThenElse(cond: CExpr, left: CExpr, right: CExpr) extends CExpr {
     override def pp: String = s"if ${cond.pp} then ${left.pp} else ${right.pp}"
+    override def ppp: String = s"if ${cond.ppp} then ${left.ppp} else ${right.ppp}"
   }
 
   case class CBinaryExpr(op: CBinOp, left: CExpr, right: CExpr) extends CExpr {
     override def pp: String = s"${left.pp} ${op.pp} ${right.pp}"
+    override def ppp: String = s"${left.ppp} ${op.ppp} ${right.ppp}"
   }
 
   case class CUnaryExpr(op: CUnOp, e: CExpr) extends CExpr {
     override def pp: String = s"${op.pp} ${e.pp}"
+    override def ppp: String = s"${op.ppp} ${e.ppp}"
   }
 
   case class COverloadedBinaryExpr(op: COverloadedBinOp, left: CExpr, right: CExpr) extends CExpr {
     override def pp: String = s"${left.pp} ${op.pp} ${right.pp}"
+    override def ppp: String = s"${left.ppp} ${op.ppp} ${right.ppp}"
   }
 
   case class CPointsTo(loc: CExpr, offset: Int = 0, value: CExpr) extends CExpr {
-    override def pp: String = s"${if (offset == 0) loc.pp else s"${loc.pp} .+ ${offset}"} :-> ${value.pp}"
+    override def pp: String = s"${if (offset == 0) loc.pp else s"${loc.pp} .+ $offset"} :-> ${value.pp}"
+    override def ppp: String = s"${if (offset == 0) loc.ppp else s"${loc.ppp} .+ $offset"} :-> ${value.ppp}"
   }
 
   case object CEmpty extends CExpr {
@@ -94,17 +100,20 @@ object Expressions {
 
   case class CSApp(pred: String, var args: Seq[CExpr], tag: Option[Int] = Some(0)) extends CExpr {
     override def pp: String = s"$pred ${args.map(arg => arg.pp).mkString(" ")}"
+    override def ppp: String = s"$pred ${args.map(arg => arg.ppp).mkString(" ")}"
   }
 
   case class CExists(vars: Seq[CVar], e: CExpr) extends CExpr {
     override def pp: String = s"exists ${vars.map(v => v.pp).mkString(" ")}, ${e.pp}"
+    override def ppp: String = s"exists ${vars.map(v => v.ppp).mkString(" ")}, ${e.ppp}"
   }
 
   case class CForAll(vars: Seq[CVar], e: CExpr) extends CExpr {
     override def pp: String = s"forall ${vars.map(v => v.pp).mkString(" ")}, ${e.pp}"
+    override def ppp: String = s"forall ${vars.map(v => v.ppp).mkString(" ")}, ${e.ppp}"
   }
 
-  sealed abstract class CUnOp extends PrettyPrinting
+  sealed abstract class CUnOp extends ProgramPrettyPrinting
 
   object COpNot extends CUnOp {
     override def pp: String = "not"
@@ -112,7 +121,7 @@ object Expressions {
 
   object COpUnaryMinus extends CUnOp
 
-  sealed abstract class COverloadedBinOp extends PrettyPrinting
+  sealed abstract class COverloadedBinOp extends ProgramPrettyPrinting
 
   sealed abstract class CBinOp extends COverloadedBinOp
 
@@ -166,6 +175,7 @@ object Expressions {
 
   object COpEq extends CBinOp {
     override def pp: String = "="
+    override def ppp: String = "=="
   }
 
   object COpBoolEq extends CBinOp {

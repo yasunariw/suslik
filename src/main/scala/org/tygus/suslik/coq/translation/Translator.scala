@@ -1,13 +1,22 @@
 package org.tygus.suslik.coq.translation
 
 import org.tygus.suslik.coq.language.Expressions._
+import org.tygus.suslik.coq.language.Statements._
 import org.tygus.suslik.coq.language._
 import org.tygus.suslik.language._
 import org.tygus.suslik.logic._
 import org.tygus.suslik.language.Expressions._
+import org.tygus.suslik.language.Statements._
 import org.tygus.suslik.logic.Specifications.Assertion
 
 object Translator {
+  def runProcedure(el: Procedure) : CProcedure = {
+    val cTp = runSSLType(el.tp)
+    val cFormals = el.formals.map(runParam)
+    val cBody = runStmt(el.body)
+    CProcedure(el.name, cTp, cFormals, cBody)
+  }
+
   def runFunSpec(el: FunSpec, predicateEnv: CPredicateEnv) : CFunSpec = {
     val cParams = el.params.map(runParam)
     def extractPureParams(e: CExpr): Set[(CoqType, CVar)] = {
@@ -40,6 +49,29 @@ object Translator {
     case LocType => CPtrType
     case IntSetType => CNatSeqType
     case VoidType => CUnitType
+  }
+
+  private def runStmt(el: Statement) : CStatement = el match {
+    case Skip => CSkip
+    case Hole => ???
+    case Error => ???
+    case Magic => ???
+    case Malloc(to, tpe, sz) =>
+      CMalloc(CVar(to.name), runSSLType(tpe), sz)
+    case Free(v) =>
+      CFree(CVar(v.name))
+    case Load(to, tpe, from, offset) =>
+      CLoad(CVar(to.name), runSSLType(tpe), CVar(from.name), offset)
+    case Store(to, offset, expr) =>
+      CStore(CVar(to.name), offset, runExpr(expr))
+    case Call(to, fun, args) =>
+      CCall(to.map { case (v, t) => (CVar(v.name), runSSLType(t))}, CVar(fun.name), args.map(runExpr))
+    case SeqComp(s1, s2) =>
+      CSeqComp(runStmt(s1), runStmt(s2))
+    case If(cond, tb, eb) =>
+      CIf(runExpr(cond), runStmt(tb), runStmt(eb))
+    case Guarded(cond, body) =>
+      CGuarded(runExpr(cond), runStmt(body))
   }
 
   private def runParam(el: (SSLType, Var)): (CoqType, CVar) = el match {
