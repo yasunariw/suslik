@@ -36,7 +36,7 @@ class Trace {
     def traverse(n: TraceNode) : TraceNode = n match {
       case g: GoalTrace =>
         val newG = g.copy()
-        newG.ruleApps = g.ruleApps.filterNot(_.isFail).map(traverse).asInstanceOf[List[RuleAppTrace]]
+        newG.ruleApps = g.ruleApps.find(!_.isFail).map(traverse).toList.asInstanceOf[List[RuleAppTrace]]
         newG
       case d: SubderivationTrace =>
         val newD = d.copy()
