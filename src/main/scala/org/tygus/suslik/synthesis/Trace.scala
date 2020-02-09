@@ -3,8 +3,12 @@ package org.tygus.suslik.synthesis
 import org.tygus.suslik.language.Statements.Statement
 import org.tygus.suslik.logic.Specifications.Goal
 
-class Trace(goal: Goal) {
-  val root: GoalTrace = GoalTrace(goal)
+class Trace {
+  var root: Option[GoalTrace] = None
+
+  def init(goal: Goal) : Unit = {
+    this.root = Some(GoalTrace(goal))
+  }
 
   def pp: String = {
     def mkSpaces(indent: Integer) : String = " " * indent * 2
@@ -22,7 +26,30 @@ class Trace(goal: Goal) {
         else s"${mkSpaces(indent)}| RuleApp ${ra.rule.toString}\n" +
           ra.alts.map(alt => traverse(alt, indent + 1)).mkString(",\n")
     }
-    traverse(root)
+    root match {
+      case Some(node) => traverse(node)
+      case None => "Uninitialized"
+    }
+  }
+
+  def pruneInvalidRuleApps: Trace = {
+    def traverse(n: TraceNode) : TraceNode = n match {
+      case g: GoalTrace =>
+        val newG = g.copy()
+        newG.ruleApps = g.ruleApps.filterNot(_.isFail).map(traverse).asInstanceOf[List[RuleAppTrace]]
+        newG
+      case d: SubderivationTrace =>
+        val newD = d.copy()
+        newD.subgoals = d.subgoals.map(traverse).asInstanceOf[List[GoalTrace]]
+        newD
+      case r: RuleAppTrace =>
+        val newR = r.copy()
+        newR.alts = r.alts.map(traverse).asInstanceOf[List[SubderivationTrace]]
+        newR
+    }
+    val newTrace = new Trace
+    newTrace.root = root.map(r => traverse(r).asInstanceOf[GoalTrace])
+    newTrace
   }
 }
 

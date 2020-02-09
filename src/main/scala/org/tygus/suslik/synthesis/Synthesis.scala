@@ -37,11 +37,12 @@ trait Synthesis extends SepLogicUtils {
     printLog(List(("Initial specification:", Console.BLACK), (s"${goal.pp}\n", Console.BLUE)))(i = 0, config)
     val stats = new SynStats()
     SMTSolving.init()
-    val trace = new Trace(goal)
+    val trace = new Trace
+    trace.init(goal)
     try {
-      synthesize(goal, config.startingDepth, trace.root)(stats = stats, rules = nextRules(goal, config.startingDepth)) match {
+      synthesize(goal, config.startingDepth, trace.root.get)(stats = stats, rules = nextRules(goal, config.startingDepth)) match {
         case Some(body) =>
-          testPrintln(trace.pp)
+          testPrintln(trace.pruneInvalidRuleApps.pp)
           val proc = Procedure(name, tp, formals, body)
           Some((proc, stats))
         case None =>
