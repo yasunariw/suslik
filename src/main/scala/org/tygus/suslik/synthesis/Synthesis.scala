@@ -42,6 +42,7 @@ trait Synthesis extends SepLogicUtils {
     try {
       synthesize(goal, config.startingDepth, trace.root.get)(stats = stats, rules = nextRules(goal, config.startingDepth)) match {
         case Some(body) =>
+          trace.root.get.stmt = Some(body)
           testPrintln(trace.pruneInvalidRuleApps.pp)
           val proc = Procedure(name, tp, formals, body)
           Some((proc, stats))

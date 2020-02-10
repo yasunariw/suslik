@@ -14,8 +14,10 @@ class Trace {
     def mkSpaces(indent: Integer) : String = " " * indent * 2
     def traverse(n: TraceNode, indent: Integer = 0) : String = n match {
       case g: GoalTrace =>
-        if (g.ruleApps.isEmpty) s"${mkSpaces(indent)}| Goal ${g.goal.pre.pp} ${g.goal.post.pp} [FAILED]"
-        else s"${mkSpaces(indent)}| Goal ${g.goal.pre.pp} ${g.goal.post.pp}\n" +
+        val stmt = if (g.stmt.isDefined) g.stmt.get.pp.replaceAll("\\n[ ]*", " ") else "??"
+        val goal = s"${g.goal.pre.pp} [[$stmt]] ${g.goal.post.pp}"
+        if (g.ruleApps.isEmpty) s"${mkSpaces(indent)}| Goal $goal [FAILED]"
+        else s"${mkSpaces(indent)}| Goal $goal\n" +
           g.ruleApps.map(ra => traverse(ra, indent + 1)).mkString(",\n")
       case sd: SubderivationTrace =>
         if (sd.subgoals.isEmpty) s"${mkSpaces(indent)}| No subgoals left [DONE]"
@@ -36,10 +38,12 @@ class Trace {
     def traverse(n: TraceNode) : TraceNode = n match {
       case g: GoalTrace =>
         val newG = g.copy()
+        newG.stmt = g.stmt
         newG.ruleApps = g.ruleApps.find(!_.isFail).map(traverse).toList.asInstanceOf[List[RuleAppTrace]]
         newG
       case d: SubderivationTrace =>
         val newD = d.copy()
+        newD.stmt = d.stmt
         newD.subgoals = d.subgoals.map(traverse).asInstanceOf[List[GoalTrace]]
         newD
       case r: RuleAppTrace =>
