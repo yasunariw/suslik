@@ -45,7 +45,7 @@ object UnificationRules extends PureLogicUtils with SepLogicUtils with RuleUtils
         val ruleApp = saveApplication((preFootprint, postFootprint), deriv, -pre.similarity(newPost))
 
         val newGoal = goal.copy(post = newPost, newRuleApp = Some(ruleApp))
-        Subderivation(List(newGoal), pureKont(toString))
+        Subderivation(List(newGoal), pureKont(toString), PureKont)
       }
       //      nubBy[Subderivation,Assertion](sortAlternativesByFootprint(alternatives).toList, sub => sub.subgoals.head.post)
       val ord = new Ordering[(Int, RuleApplication)] {
@@ -99,7 +99,7 @@ object UnificationRules extends PureLogicUtils with SepLogicUtils with RuleUtils
           val _p2 = mkConjunction(rest2).subst(x, e)
           val _s2 = s2.subst(x, e)
           val newGoal = goal.copy(post = Assertion(_p2, _s2))
-          List(Subderivation(List(newGoal), pureKont(toString)))
+          List(Subderivation(List(newGoal), pureKont(toString), PureKont))
         case _ => Nil
       }
     }
@@ -127,7 +127,7 @@ object UnificationRules extends PureLogicUtils with SepLogicUtils with RuleUtils
         t <- preConjuncts
         sigma <- PureUnification.tryUnify(t, s, goal.existentials)
         newGoal = goal.copy(post = goal.post.subst(sigma))
-      } yield Subderivation(List(newGoal), pureKont(toString))
+      } yield Subderivation(List(newGoal), pureKont(toString), PureKont)
     }
   }
 
@@ -171,7 +171,7 @@ object UnificationRules extends PureLogicUtils with SepLogicUtils with RuleUtils
             newPre = Assertion(pre.phi, (goal.pre.sigma - hl) ** PointsTo(x, offset, l))
             subGoal = goal.copy(newPre, post.subst(m, l))
             kont = prepend(Store(x, offset, l), toString)
-          } yield Subderivation(List(subGoal), kont)
+          } yield Subderivation(List(subGoal), kont, PureKont)
         case Some((hl, hr)) =>
           ruleAssert(false, s"Write rule matched unexpected heaplets ${hl.pp} and ${hr.pp}")
           Nil
@@ -198,7 +198,7 @@ object UnificationRules extends PureLogicUtils with SepLogicUtils with RuleUtils
           if goal.getType(ex).conformsTo(Some(goal.getType(v)))
           sigma = Map(ex -> v)
           newGoal = goal.copy(post = goal.post.subst(sigma))
-        } yield Subderivation(List(newGoal), pureKont(toString))
+        } yield Subderivation(List(newGoal), pureKont(toString), PureKont)
       } else Nil
     }
   }
@@ -233,7 +233,7 @@ object UnificationRules extends PureLogicUtils with SepLogicUtils with RuleUtils
         ruleApp = saveApplication((preFootprint, postFootprint), deriv)
         newGoal = goal.copy(newPre, newPost, newRuleApp = Some(ruleApp))
       } yield {
-        Subderivation(List(newGoal), pureKont(toString))
+        Subderivation(List(newGoal), pureKont(toString), PureKont)
       }
       sortAlternativesByFootprint(alternatives)
     }

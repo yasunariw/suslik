@@ -57,9 +57,10 @@ object OperationalRules extends SepLogicUtils with RuleUtils {
           val newPre = Assertion(pre.phi, goal.pre.sigma - hl)
           val newPost = Assertion(post.phi, goal.post.sigma - hr)
           val subGoal = goal.copy(newPre, newPost)
-          val kont: StmtProducer = prepend(Store(x, offset, e2), toString)
+          val stmt = Store(x, offset, e2)
+          val kont: StmtProducer = prepend(stmt, toString)
 
-          List(Subderivation(List(subGoal), kont))
+          List(Subderivation(List(subGoal), kont, Prepend(stmt)))
         case Some((hl, hr)) =>
           ruleAssert(assertion = false, s"Write rule matched unexpected heaplets ${hl.pp} and ${hr.pp}")
           Nil
@@ -104,7 +105,7 @@ object OperationalRules extends SepLogicUtils with RuleUtils {
           val newPost = Assertion(post.phi, (post.sigma - h) ** PointsTo(x, offset, y))
           val subGoal = goal.copy(post = newPost)
           val kont: StmtProducer = append(Store(x, offset, l), toString)
-          List(Subderivation(List(subGoal), kont))
+          List(Subderivation(List(subGoal), kont, Append(Store(x, offset, l))))
         case Some(h) =>
           ruleAssert(false, s"Write rule matched unexpected heaplet ${h.pp}")
           Nil
@@ -144,8 +145,9 @@ object OperationalRules extends SepLogicUtils with RuleUtils {
           val tpy = goal.getType(a)
 
           val subGoal = goal.copy(pre.subst(a, y), post = post.subst(a, y)).addProgramVar(y,tpy)
-          val kont: StmtProducer = prepend(Load(y, tpy, x, offset), toString)
-          List(Subderivation(List(subGoal), kont))
+          val stmt = Load(y, tpy, x, offset)
+          val kont: StmtProducer = prepend(stmt, toString)
+          List(Subderivation(List(subGoal), kont, Prepend(stmt)))
         case Some(h) =>
           ruleAssert(false, s"Read rule matched unexpected heaplet ${h.pp}")
           Nil
@@ -200,8 +202,9 @@ object OperationalRules extends SepLogicUtils with RuleUtils {
           val ruleApp = saveApplication((Set.empty, postFootprint), deriv)
 
           val subGoal = goal.copy(newPre, post.subst(x, y), newRuleApp = Some(ruleApp)).addProgramVar(y, tpy)
-          val kont: StmtProducer = prepend(Malloc(y, tpy, sz), toString)
-          List(Subderivation(List(subGoal), kont))
+          val stmt = Malloc(y, tpy, sz)
+          val kont: StmtProducer = prepend(stmt, toString)
+          List(Subderivation(List(subGoal), kont, Prepend(stmt)))
         case _ => Nil
       }
     }
@@ -247,7 +250,7 @@ object OperationalRules extends SepLogicUtils with RuleUtils {
           val subGoal = goal.copy(newPre, newRuleApp = Some(ruleApp))
           val kont: StmtProducer = prepend(Free(x), toString)
 
-          List(Subderivation(List(subGoal), kont))
+          List(Subderivation(List(subGoal), kont, Prepend(Free(x))))
         case Some(_) => Nil
       }
     }

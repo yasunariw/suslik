@@ -54,7 +54,7 @@ object SymbolicExecutionRules extends SepLogicUtils with RuleUtils {
             val newPre = Assertion(pre.phi, (pre.sigma - h) ** PointsTo(to, offset, new_val))
             val subGoal = goal.copy(newPre, sketch = rest)
             val kont: StmtProducer = prependFromSketch(cmd, toString)
-            List(Subderivation(List(subGoal), kont))
+            List(Subderivation(List(subGoal), kont, PrependFromSketch(cmd)))
           case Some(h) =>
             ruleAssert(false, s"Write rule matched unexpected heaplet ${h.pp}")
             Nil
@@ -103,7 +103,7 @@ object SymbolicExecutionRules extends SepLogicUtils with RuleUtils {
               post = post.copy(phi = post.phi && (to |=| a)),
               sketch = rest).addProgramVar(to, tpy)
             val kont: StmtProducer = prependFromSketch(cmd, toString)
-            List(Subderivation(List(subGoal), kont))
+            List(Subderivation(List(subGoal), kont, PrependFromSketch(cmd)))
           case Some(h) =>
             throw SynthesisException(cmd.pp + s" Read rule matched unexpected heaplet ${
               h.pp
@@ -139,7 +139,7 @@ object SymbolicExecutionRules extends SepLogicUtils with RuleUtils {
         val newPre = Assertion(pre.phi, SFormula(pre.sigma.chunks ++ freshChunks ++ List(freshBlock)))
         val subGoal = goal.copy(newPre, sketch = rest).addProgramVar(y, tpy)
         val kont: StmtProducer = prependFromSketch(cmd, toString)
-        List(Subderivation(List(subGoal), kont))
+        List(Subderivation(List(subGoal), kont, PrependFromSketch(cmd)))
       }
       case _ => Nil
     }
@@ -175,7 +175,7 @@ object SymbolicExecutionRules extends SepLogicUtils with RuleUtils {
             val newPre = Assertion(pre.phi, pre.sigma - h - pts)
             val subGoal = goal.copy(newPre, sketch = rest)
             val kont: StmtProducer = prependFromSketch(cmd, toString)
-            List(Subderivation(List(subGoal), kont))
+            List(Subderivation(List(subGoal), kont, PrependFromSketch(cmd)))
           case Some(what) => throw SynthesisException("Unexpected heaplet " + what + " found while executing " + cmd.pp)
         }
       }
@@ -221,7 +221,7 @@ object SymbolicExecutionRules extends SepLogicUtils with RuleUtils {
         }
         symExecAssert(subgoals.nonEmpty, cmd.pp + " function can't be called.")
         assert(subgoals.size == 1, "Unexpected: function call produced multiple subgoals: " + cmd.pp)
-        List(Subderivation(subgoals, prepend(cmd, toString)))
+        List(Subderivation(subgoals, prepend(cmd, toString), Prepend(cmd)))
       }
       case _ => Nil
     }
@@ -243,7 +243,7 @@ object SymbolicExecutionRules extends SepLogicUtils with RuleUtils {
         val pre = goal.pre
         val thenGoal = goal.copy(Assertion(pre.phi && cond, pre.sigma), sketch = tb)
         val elseGoal = goal.copy(Assertion(pre.phi && cond.not, pre.sigma), sketch = eb)
-        List(Subderivation(List(thenGoal, elseGoal), kont(cond)))
+        List(Subderivation(List(thenGoal, elseGoal), kont(cond), MakeIf(cond)))
       }
       case (cmd@If(cond, tb, eb), _) => {
         throw SynthesisException("Found conditional in the middle of the program. Conditionals only allowed at the end.")
@@ -264,7 +264,7 @@ object SymbolicExecutionRules extends SepLogicUtils with RuleUtils {
         h <- goal.pre.sigma.chunks
         (selector, subgoal) <- UnfoldingRules.Open.mkInductiveSubGoals(goal, h).getOrElse(Nil)
         if SMTSolving.valid(goal.pre.phi ==> selector)
-      } yield Subderivation(List(subgoal), pureKont(toString))
+      } yield Subderivation(List(subgoal), pureKont(toString), PureKont)
     }
   }
 }

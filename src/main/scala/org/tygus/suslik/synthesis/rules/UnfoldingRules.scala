@@ -72,7 +72,7 @@ object UnfoldingRules extends SepLogicUtils with RuleUtils {
           case None => None
           case Some(selGoals) =>
             val (selectors, subGoals) = selGoals.unzip
-            Some(Subderivation(subGoals, kont(selectors)))
+            Some(Subderivation(subGoals, kont(selectors), MakeOpen(selectors)))
         }
       } yield s
     }
@@ -135,7 +135,7 @@ object UnfoldingRules extends SepLogicUtils with RuleUtils {
         a <- preApps
         newEnv = mkIndHyp(goal, a)
         newGoal = goal.copy(env = newEnv)
-      } yield Subderivation(Seq(newGoal), pureKont(toString))
+      } yield Subderivation(Seq(newGoal), pureKont(toString), PureKont)
     }
   }
 
@@ -207,8 +207,9 @@ object UnfoldingRules extends SepLogicUtils with RuleUtils {
         if args.flatMap(_.vars).toSet.subsetOf(goal.vars)
         callGoal <- mkCallGoal(f, sub, callSubPre, goal)
       } yield {
-        val kont: StmtProducer = prepend(Call(None, Var(f.name), args), toString)
-        Subderivation(List(callGoal), kont)
+        val stmt = Call(None, Var(f.name), args)
+        val kont: StmtProducer = prepend(stmt, toString)
+        Subderivation(List(callGoal), kont, Prepend(stmt))
       }).toSeq
     }
 
@@ -286,7 +287,7 @@ object UnfoldingRules extends SepLogicUtils with RuleUtils {
           writes.foldRight(rest) { case (w, r) => SeqComp(w, r) }
         }
         val subGoals = writeGoals ++ List(restGoal)
-        Subderivation(subGoals, kont)
+        Subderivation(subGoals, kont, MakeAbduceCall(n))
       }).toSeq
     }
 
@@ -375,7 +376,7 @@ object UnfoldingRules extends SepLogicUtils with RuleUtils {
             val postFootprint = Set(deriv.postIndex.lastIndexOf(h))
             val ruleApp = saveApplication((Set.empty, postFootprint), deriv)
 
-            Subderivation(List(goal.copy(post = newPost, newRuleApp = Some(ruleApp))), pureKont(toString))
+            Subderivation(List(goal.copy(post = newPost, newRuleApp = Some(ruleApp))), pureKont(toString), PureKont)
           }
           subDerivations
         case _ => Nil

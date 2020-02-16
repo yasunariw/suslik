@@ -36,7 +36,7 @@ object FailRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
       val post = goal.post.phi
 
       if (!SMTSolving.sat(pre && post))
-        List(Subderivation(Nil, _ => Magic)) // post inconsistent: only magic can save us
+        List(Subderivation(Nil, _ => Magic, MakeMagic)) // post inconsistent: only magic can save us
       else
         Nil
     }
@@ -54,7 +54,7 @@ object FailRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
       // If precondition does not contain predicates, we can't get get new facts from anywhere
       val universalPost = mkConjunction(conjuncts(post).filterNot(p => p.vars.exists(goal.isExistential)))
       if (!SMTSolving.valid(pre ==> universalPost))
-        List(Subderivation(Nil, _ => Magic)) // universal post not implies by pre: only magic can save us
+        List(Subderivation(Nil, _ => Magic, MakeMagic)) // universal post not implies by pre: only magic can save us
       else
         Nil
     }
@@ -90,7 +90,7 @@ object FailRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
         if SMTSolving.sat(pre && cond)
         newPre = goal.pre.copy(phi = goal.pre.phi && cond)
         newGoal = goal.copy(newPre)
-      } yield Subderivation(List(newGoal), stmts => Guarded(cond, stmts.head))
+      } yield Subderivation(List(newGoal), stmts => Guarded(cond, stmts.head), MakeGuarded(cond))
 
     def apply(goal: Goal): Seq[Subderivation] = {
       val pre = goal.pre.phi
@@ -103,7 +103,7 @@ object FailRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
         val guarded = guardedCandidates(goal, pre, universalPost)
         if (guarded.isEmpty)
           if (goal.env.config.fail)
-            List(Subderivation(Nil, _ => Magic)) // pre doesn't imply post: only magic can save us
+            List(Subderivation(Nil, _ => Magic, MakeMagic)) // pre doesn't imply post: only magic can save us
           else
             Nil // would like to return Magic, but fail optimization is disabled
         else guarded
@@ -123,7 +123,7 @@ object FailRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
           if (goal.pre.sigma.chunks.length == goal.post.sigma.chunks.length)
             Nil
           else
-            List(Subderivation(Nil, _ => Magic)) // spatial parts do not match: only magic can save us
+            List(Subderivation(Nil, _ => Magic, MakeMagic)) // spatial parts do not match: only magic can save us
         case _ => Nil // does not apply if we could still alloc or free
       }
 

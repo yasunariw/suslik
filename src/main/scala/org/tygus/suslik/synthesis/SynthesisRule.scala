@@ -48,7 +48,7 @@ trait FlatPhase {
   * consists of sub-goals (rule premises) and
   * a statement producer that assembles the sub-goal results
   */
-case class Subderivation(subgoals: Seq[Goal], kont: StmtProducer)
+case class Subderivation(subgoals: Seq[Goal], kont: StmtProducer, comp: StmtComputation)
     extends PrettyPrinting with PureLogicUtils {
 
   override def pp: String =

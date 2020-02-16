@@ -37,7 +37,7 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
       if (pre.sigma.isEmp && post.sigma.isEmp && // heaps are empty
         goal.existentials.isEmpty &&             // no existentials
         SMTSolving.valid(pre.phi ==> post.phi))  // pre implies post
-        List(Subderivation(Nil, _ => Skip))      // we are done
+        List(Subderivation(Nil, _ => Skip, MakeSkip))      // we are done
       else Nil
     }
   }
@@ -56,7 +56,7 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
       val post = goal.post.phi
 
       if (!SMTSolving.sat(pre))
-        List(Subderivation(Nil, _ => Error)) // pre inconsistent: return error
+        List(Subderivation(Nil, _ => Error, MakeError)) // pre inconsistent: return error
       else
         Nil
     }
@@ -88,7 +88,7 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
           val postFootprint = Set(deriv.postIndex.lastIndexOf(hPost))
           val ruleApp = saveApplication((preFootprint, postFootprint), deriv)
           val newGoal = goal.copy(newPre, newPost, newRuleApp = Some(ruleApp))
-          List(Subderivation(List(newGoal), pureKont(toString)))
+          List(Subderivation(List(newGoal), pureKont(toString), PureKont))
         }
       }
     }
@@ -144,7 +144,7 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
         val newPre = addToAssertion(pre, prePointers)
         val newPost = addToAssertion(post, postPointers)
         val newGoal = goal.copy(newPre, newPost)
-        List(Subderivation(List(newGoal), pureKont(toString)))
+        List(Subderivation(List(newGoal), pureKont(toString), PureKont))
       }
     }
   }
@@ -180,13 +180,13 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
         case (None, None) => Nil
         case (Some(p1), None) =>
           val newGoal = goal.copy(pre = Assertion(p1, s1))
-          List(Subderivation(List(newGoal), pureKont(toString)))
+          List(Subderivation(List(newGoal), pureKont(toString), PureKont))
         case (None, Some(p2)) =>
           val newGoal = goal.copy(post = Assertion(p2, s2))
-          List(Subderivation(List(newGoal), pureKont(toString)))
+          List(Subderivation(List(newGoal), pureKont(toString), PureKont))
         case (Some(p1), Some(p2)) =>
           val newGoal = goal.copy(pre = Assertion(p1, s1), post = Assertion(p2, s2))
-          List(Subderivation(List(newGoal), pureKont(toString)))
+          List(Subderivation(List(newGoal), pureKont(toString), PureKont))
 //        case (None, _) => Nil
 //        case (Some(p1), _) =>
 //          val newGoal = goal.copy(pre = Assertion(p1, s1))
@@ -228,7 +228,7 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
           val newGoal = goal.copy(
             Assertion(_p1, _s1),
             Assertion(_p2, _s2))
-          List(Subderivation(List(newGoal), pureKont(toString)))
+          List(Subderivation(List(newGoal), pureKont(toString), PureKont))
         case _ => Nil
       }
     }
@@ -247,7 +247,7 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
         val newGoal = goal.copy(
           Assertion(_p1, _s1),
           Assertion(_p2, _s2))
-        List(Subderivation(List(newGoal), pureKont(toString)))
+        List(Subderivation(List(newGoal), pureKont(toString), PureKont))
       }
 
       findConjunctAndRest({
@@ -303,7 +303,7 @@ object LogicalRules extends PureLogicUtils with SepLogicUtils with RuleUtils {
           val newGoal = goal.copy(
             Assertion(_p1, _s1),
             Assertion(_p2, _s2))
-          List(Subderivation(List(newGoal), pureKont(toString)))
+          List(Subderivation(List(newGoal), pureKont(toString), PureKont))
       }
     }
   }
