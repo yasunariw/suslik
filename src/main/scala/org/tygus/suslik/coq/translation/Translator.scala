@@ -7,14 +7,15 @@ import org.tygus.suslik.language._
 import org.tygus.suslik.logic._
 import org.tygus.suslik.language.Expressions._
 import org.tygus.suslik.language.Statements._
-import org.tygus.suslik.logic.Specifications.Assertion
+import org.tygus.suslik.logic.Specifications.{Assertion, Goal}
 import org.tygus.suslik.synthesis._
+import org.tygus.suslik.synthesis.rules.OperationalRules.FreeRule
 
 object Translator {
   def runProcedure(el: Procedure, trace: Trace) : CProcedure = {
     val cTp = runSSLType(el.tp)
     val cFormals = el.formals.map(runParam)
-    CProcedure(el.name, cTp, cFormals, runTrace(trace))
+    CProcedure(el.name, cTp, cFormals, runStmtFromTrace(trace))
   }
 
   def runFunSpec(el: FunSpec, predicateEnv: CPredicateEnv) : CFunSpec = {
@@ -51,18 +52,18 @@ object Translator {
     case VoidType => CUnitType
   }
 
-  def runTrace(trace: Trace) : CStatement = {
+  def runStmtFromTrace(trace: Trace) : CStatement = {
     def traverse(goalTrace: GoalTrace) : CStatement = {
       val subgoals = goalTrace.ruleApps.head.alts.head.subgoals.reverse
       goalTrace.ruleApps.head.alts.head.alt.comp match {
         case PureKont =>
           traverse(subgoals.head)
         case Prepend(s) =>
-          CSeqComp(runStmt(s), traverse(subgoals.head)).simplify
+          CSeqComp(runStmt(s, Some(goalTrace.goal)), traverse(subgoals.head)).simplify
         case PrependFromSketch(s) =>
-          CSeqComp(runStmt(s), traverse(subgoals.head))
+          CSeqComp(runStmt(s, Some(goalTrace.goal)), traverse(subgoals.head))
         case Append(s) =>
-          CSeqComp(traverse(subgoals.head), runStmt(s)).simplify
+          CSeqComp(traverse(subgoals.head), runStmt(s, Some(goalTrace.goal))).simplify
         case MakeSkip =>
           CSkip
         case MakeError =>
@@ -97,7 +98,7 @@ object Translator {
     }
   }
 
-  private def runStmt(el: Statement) : CStatement = el match {
+  private def runStmt(el: Statement, goal: Option[Goal] = None) : CStatement = el match {
     case Skip => CSkip
     case Hole => ???
     case Error => ???
@@ -105,6 +106,13 @@ object Translator {
     case Malloc(to, tpe, sz) =>
       CMalloc(CVar(to.name), runSSLType(tpe), sz)
     case Free(v) =>
+      if (goal.isDefined) {
+        val heaplets = FreeRule.findTargetHeaplets(goal.get)
+        if (heaplets.isDefined) {
+          return (1 until heaplets.get._1.sz)
+            .foldLeft(CFree(CVar(v.name)).asInstanceOf[CStatement])((acc, n) => CSeqComp(CFree(CVar(v.name), n), acc))
+        }
+      }
       CFree(CVar(v.name))
     case Load(to, tpe, from, offset) =>
       CLoad(CVar(to.name), runSSLType(tpe), CVar(from.name), offset)

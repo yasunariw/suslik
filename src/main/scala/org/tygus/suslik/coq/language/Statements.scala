@@ -20,7 +20,7 @@ object Statements {
           acc ++ from.collect(p)
         case CMalloc(_, _, _) =>
           acc
-        case CFree(x) =>
+        case CFree(x, _) =>
           acc ++ x.collect(p)
         case CCall(_, fun, args) =>
           acc ++ fun.collect(p) ++ args.flatMap(_.collect(p)).toSet
@@ -55,9 +55,13 @@ object Statements {
           case CMalloc(to, _, sz) =>
             builder.append(mkSpaces(offset))
             builder.append(s"${to.ppp} <-- allocb ${to.ppp} $sz")
-          case CFree(v) =>
+          case CFree(v, off) =>
             builder.append(mkSpaces(offset))
-            builder.append(s"dealloc ${v.ppp}")
+            if (off > 0) {
+              builder.append(s"dealloc (${v.ppp} .+ $off)")
+            } else {
+              builder.append(s"dealloc ${v.ppp}")
+            }
           case CStore(to, off, e) =>
             builder.append(mkSpaces(offset))
             val t = if (off <= 0) to.ppp else s"(${to.ppp} .+ $off)"
@@ -109,7 +113,7 @@ object Statements {
 
   case class CMalloc(to: CVar, tpe: CoqType, sz: Int = 1) extends CStatement with ReturnsValue
 
-  case class CFree(v: CVar) extends CStatement
+  case class CFree(v: CVar, offset: Int = 0) extends CStatement
 
   case class CLoad(to: CVar, tpe: CoqType, from: CVar, offset: Int = 0) extends CStatement with ReturnsValue
 
