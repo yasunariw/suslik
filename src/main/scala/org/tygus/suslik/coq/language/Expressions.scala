@@ -50,6 +50,8 @@ object Expressions {
         CSApp(pred, args.map(_.simplify), tag)
       case other => other
     }
+
+    def vars: Seq[CVar] = collect(_.isInstanceOf[CVar]).toSeq
   }
 
   case class CVar(name: String) extends CExpr {
@@ -103,12 +105,12 @@ object Expressions {
     override def ppp: String = s"$pred ${args.map(arg => arg.ppp).mkString(" ")}"
   }
 
-  case class CExists(vars: Seq[CVar], e: CExpr) extends CExpr {
+  case class CExists(override val vars: Seq[CVar], e: CExpr) extends CExpr {
     override def pp: String = s"exists ${vars.map(v => v.pp).mkString(" ")}, ${e.pp}"
     override def ppp: String = s"exists ${vars.map(v => v.ppp).mkString(" ")}, ${e.ppp}"
   }
 
-  case class CForAll(vars: Seq[CVar], e: CExpr) extends CExpr {
+  case class CForAll(override val vars: Seq[CVar], e: CExpr) extends CExpr {
     override def pp: String = s"forall ${vars.map(v => v.pp).mkString(" ")}, ${e.pp}"
     override def ppp: String = s"forall ${vars.map(v => v.ppp).mkString(" ")}, ${e.ppp}"
   }

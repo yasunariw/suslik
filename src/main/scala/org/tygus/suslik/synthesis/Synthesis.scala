@@ -1,6 +1,7 @@
 package org.tygus.suslik.synthesis
 
 import org.tygus.suslik.Memoization
+import org.tygus.suslik.coq.translation.Translator
 import org.tygus.suslik.language.Statements._
 import org.tygus.suslik.logic.Specifications._
 import org.tygus.suslik.logic._
@@ -43,8 +44,11 @@ trait Synthesis extends SepLogicUtils {
       synthesize(goal, config.startingDepth, trace.root.get)(stats = stats, rules = nextRules(goal, config.startingDepth)) match {
         case Some(body) =>
           trace.root.get.stmt = Some(body)
-          testPrintln(trace.pruneInvalidRuleApps.pp)
+
+          val prunedTrace = trace.pruneInvalidRuleApps
           val proc = Procedure(name, tp, formals, body)
+          testPrintln(prunedTrace.pp)
+          testPrintln(Translator.runProcedure(proc, prunedTrace).ppp)
           Some((proc, stats))
         case None =>
           printlnErr(s"Deductive synthesis failed for the goal\n ${goal.pp},\n depth = ${config.startingDepth}.")

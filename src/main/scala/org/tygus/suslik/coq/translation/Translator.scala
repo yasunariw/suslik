@@ -8,13 +8,13 @@ import org.tygus.suslik.logic._
 import org.tygus.suslik.language.Expressions._
 import org.tygus.suslik.language.Statements._
 import org.tygus.suslik.logic.Specifications.Assertion
+import org.tygus.suslik.synthesis._
 
 object Translator {
-  def runProcedure(el: Procedure) : CProcedure = {
+  def runProcedure(el: Procedure, trace: Trace) : CProcedure = {
     val cTp = runSSLType(el.tp)
     val cFormals = el.formals.map(runParam)
-    val cBody = runStmt(el.body)
-    CProcedure(el.name, cTp, cFormals, cBody)
+    CProcedure(el.name, cTp, cFormals, runTrace(trace))
   }
 
   def runFunSpec(el: FunSpec, predicateEnv: CPredicateEnv) : CFunSpec = {
@@ -49,6 +49,52 @@ object Translator {
     case LocType => CPtrType
     case IntSetType => CNatSeqType
     case VoidType => CUnitType
+  }
+
+  def runTrace(trace: Trace) : CStatement = {
+    def traverse(goalTrace: GoalTrace) : CStatement = {
+      val subgoals = goalTrace.ruleApps.head.alts.head.subgoals.reverse
+      goalTrace.ruleApps.head.alts.head.alt.comp match {
+        case PureKont =>
+          traverse(subgoals.head)
+        case Prepend(s) =>
+          CSeqComp(runStmt(s), traverse(subgoals.head)).simplify
+        case PrependFromSketch(s) =>
+          CSeqComp(runStmt(s), traverse(subgoals.head))
+        case Append(s) =>
+          CSeqComp(traverse(subgoals.head), runStmt(s)).simplify
+        case MakeSkip =>
+          CSkip
+        case MakeError =>
+          CError
+        case MakeMagic =>
+          CMagic
+        case MakeGuarded(cond) =>
+          CGuarded(runExpr(cond), traverse(subgoals.head))
+        case MakeOpen(selectors) =>
+          val stmts = subgoals.map(traverse)
+          if (stmts.length == 1) stmts.head else {
+            val cond_branches = selectors.zip(stmts).reverse
+            val ctail = cond_branches.tail
+            val finalBranch = cond_branches.head._2
+            ctail.foldLeft(finalBranch) { case (eb, (c, tb)) => CIf(runExpr(c), tb, eb).simplify }
+          }
+        case MakeIf(cond) =>
+          CIf(runExpr(cond), traverse(subgoals.head), traverse(subgoals.last))
+        case MakeAbduceCall(n) =>
+          val writes = subgoals.take(n)
+          val rest = subgoals.drop(n).head
+          writes.foldRight(traverse(rest)) { case (w, r) => CSeqComp(traverse(w), r) }
+      }
+
+    }
+
+    trace.root match {
+      case Some(goalTrace) =>
+        traverse(goalTrace)
+      case None =>
+        CError
+    }
   }
 
   private def runStmt(el: Statement) : CStatement = el match {

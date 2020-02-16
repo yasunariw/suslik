@@ -205,7 +205,7 @@ object Statements {
 
   // if (cond) { tb } else { eb }
   case class If(cond: Expr, tb: Statement, eb: Statement) extends Statement {
-    def simplify: Statement = {
+      def simplify: Statement = {
       (tb, eb) match {
         case (Skip, Skip) => Skip
         case (Error, _) => eb
