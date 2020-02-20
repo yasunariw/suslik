@@ -59,11 +59,11 @@ object Translator {
         case PureKont =>
           traverse(subgoals.head)
         case Prepend(s) =>
-          CSeqComp(runStmt(s, Some(goalTrace.goal)), traverse(subgoals.head)).simplify
+          CSeqComp(runStmt(s, goalTrace.goal), traverse(subgoals.head)).simplify
         case PrependFromSketch(s) =>
-          CSeqComp(runStmt(s, Some(goalTrace.goal)), traverse(subgoals.head))
+          CSeqComp(runStmt(s, goalTrace.goal), traverse(subgoals.head))
         case Append(s) =>
-          CSeqComp(traverse(subgoals.head), runStmt(s, Some(goalTrace.goal))).simplify
+          CSeqComp(traverse(subgoals.head), runStmt(s, goalTrace.goal)).simplify
         case MakeSkip =>
           CSkip
         case MakeError =>
@@ -98,7 +98,7 @@ object Translator {
     }
   }
 
-  private def runStmt(el: Statement, goal: Option[Goal] = None) : CStatement = el match {
+  private def runStmt(el: Statement, goal: Goal) : CStatement = el match {
     case Skip => CSkip
     case Hole => ???
     case Error => ???
@@ -106,12 +106,10 @@ object Translator {
     case Malloc(to, tpe, sz) =>
       CMalloc(CVar(to.name), runSSLType(tpe), sz)
     case Free(v) =>
-      if (goal.isDefined) {
-        val heaplets = FreeRule.findTargetHeaplets(goal.get)
-        if (heaplets.isDefined) {
-          return (1 until heaplets.get._1.sz)
-            .foldLeft(CFree(CVar(v.name)).asInstanceOf[CStatement])((acc, n) => CSeqComp(CFree(CVar(v.name), n), acc))
-        }
+      val heaplets = FreeRule.findTargetHeaplets(goal)
+      if (heaplets.isDefined) {
+        return (1 until heaplets.get._1.sz)
+          .foldLeft(CFree(CVar(v.name)).asInstanceOf[CStatement])((acc, n) => CSeqComp(CFree(CVar(v.name), n), acc))
       }
       CFree(CVar(v.name))
     case Load(to, tpe, from, offset) =>
@@ -121,11 +119,11 @@ object Translator {
     case Call(to, fun, args) =>
       CCall(to.map { case (v, t) => (CVar(v.name), runSSLType(t))}, CVar(fun.name), args.map(runExpr))
     case SeqComp(s1, s2) =>
-      CSeqComp(runStmt(s1), runStmt(s2))
+      CSeqComp(runStmt(s1, goal), runStmt(s2, goal))
     case If(cond, tb, eb) =>
-      CIf(runExpr(cond), runStmt(tb), runStmt(eb))
+      CIf(runExpr(cond), runStmt(tb, goal), runStmt(eb, goal))
     case Guarded(cond, body) =>
-      CGuarded(runExpr(cond), runStmt(body))
+      CGuarded(runExpr(cond), runStmt(body, goal))
   }
 
   private def runParam(el: (SSLType, Var)): (CoqType, CVar) = el match {
