@@ -72,10 +72,6 @@ object TranslationRunner extends SynthesisRunnerUtil {
     val cLseg = cPredicates("lseg")
     testPrintln(cLseg.pp)
 
-    val funSpec = specs.head
-    val cFunSpec = Translator.runFunSpec(funSpec.resolveOverloading(env), cPredicates)
-    testPrintln(cFunSpec.pp)
-
     val spec = specs.head
     val time1 = System.currentTimeMillis()
     val sresult = synthesizeProc(spec, env.copy(config = params), body)

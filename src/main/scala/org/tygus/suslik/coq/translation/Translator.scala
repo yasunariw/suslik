@@ -18,24 +18,11 @@ object Translator {
     CProcedure(el.name, cTp, cFormals, runStmtFromTrace(trace))
   }
 
-  def runFunSpec(el: FunSpec, predicateEnv: CPredicateEnv) : CFunSpec = {
-    val cParams = el.params.map(runParam)
-    def extractPureParams(e: CExpr): Set[(CoqType, CVar)] = {
-      val apps : Set[CSApp] = e.collect(_.isInstanceOf[CSApp])
-      apps
-        .flatMap(app => {
-          val vars: Set[CVar] = app.collect(_.isInstanceOf[CVar])
-          vars.zip(predicateEnv(app.pred).params).map {
-            case (currParam, sigParam) => (sigParam._1, currParam)
-          }
-        })
-        .filter(p => p._1 != CHeapType && !cParams.contains(p))
-    }
-    val cRType = runSSLType(el.rType)
-    val cPre = runAsn(el.pre).simplify
-    val cPost = runAsn(el.post).simplify
-    val pureParams = extractPureParams(cPre) ++ extractPureParams(cPost)
-    CFunSpec(el.name, cRType, cParams, pureParams.toList, cPre, cPost)
+  def runFunSpecFromTrace(tp: SSLType, trace: Trace) : CFunSpec = {
+    val root = trace.root.get
+    val goal = root.goal
+    val pureParams = goal.universalGhosts.map(v => runParam((goal.gamma(v), v))).toList
+    CFunSpec(goal.fname, runSSLType(tp), goal.formals.map(runParam), pureParams, runAsn(goal.pre).simplify, runAsn(goal.post).simplify)
   }
 
   def runInductivePredicate(el: InductivePredicate) : CInductivePredicate = {
@@ -152,31 +139,14 @@ object Translator {
     CBinaryExpr(COpAnd, runExpr(el.phi), runSFormula(el.sigma))
 
   private def runSFormula(el: SFormula): CExpr = {
-    val heapVarName = if (el.ptss.isEmpty) "h" else "h'"
-    val appsAux: Seq[CExpr] = el.apps.map(app => CSApp(app.pred, app.args.map(arg => runExpr(arg)) :+ CVar(heapVarName), app.tag))
-    val apps: Option[CExpr] = appsAux match {
-      case Nil => None
-      case hd :: tl => Some(tl.foldLeft(hd)((e, acc) => CBinaryExpr(COpAnd, e, acc)))
-    }
-    val ptss = el.ptss.map(h => runHeaplet(h)) match {
-      case Nil => None
-      case hd :: tl => Some(CBinaryExpr(COpEq, CVar("h"), (tl ++ Seq(CVar("h'"))).foldLeft(hd)((e, acc) => CBinaryExpr(COpHeapJoin, e, acc))))
-    }
-
-    (apps, ptss) match {
-      case (Some(cApps), Some(cPtss)) => CBinaryExpr(COpAnd, cPtss, cApps)
-      case (None, Some(cPtss)) => cPtss
-      case (Some(cApps), None) => cApps
-      case _ => CBinaryExpr(COpEq, CVar("h"), CEmpty)
-    }
+    val apps = el.apps.map(app => CSApp(
+      app.pred,
+      app.args.map(runExpr),
+      app.tag))
+    val ptss = el.ptss.map(pts => CPointsTo(runExpr(pts.loc), pts.offset, runExpr(pts.value)))
+    CSFormula("h", apps, ptss)
   }
-
-  private def runHeaplet(el: Heaplet): CExpr = el match {
-    case PointsTo(loc, offset, value) => CPointsTo(runExpr(loc), offset, runExpr(value))
-    case Block(loc, sz) => ???
-    case SApp(pred, args, tag) => CSApp(pred, args.map(arg => runExpr(arg)), tag)
-  }
-
+  
   private def runUnaryExpr(el: UnaryExpr) : CExpr = el match {
     case UnaryExpr(OpNot, e) => e match {
       case BinaryExpr(OpEq, left, right) => COverloadedBinaryExpr(COpNotEqual, runExpr(left), runExpr(right))

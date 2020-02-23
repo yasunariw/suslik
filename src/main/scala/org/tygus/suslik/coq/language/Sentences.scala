@@ -26,13 +26,18 @@ case class CInductivePredicate(name: String, params: CFormals, clauses: Seq[CInd
 
 case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: CFormals, pre: CExpr, post: CExpr) extends PrettyPrinting {
   override def pp: String = {
+    val preEx = pre.vars.filterNot(programVars.contains)
+    val postEx = post.vars.filterNot(programVars.contains)
     (""
-      + s"Definition ${name}_type :=\n"
-      + s"  forall ${params.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")},\n"
-      + s"    ${pureParams.map{ case (t, v) => s"{${v.pp} : ${t.pp}}" }.mkString(" ")},\n"
+      + s"Definition ${name}_type ${params.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")} :=\n"
+      + (if (pureParams.isEmpty) "" else s"  {${pureParams.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")}},\n")
       + s"    STsep (\n"
-      + s"      fun h => ${pre.pp},\n"
-      + s"      [vfun (_: ${rType.pp}) h => ${post.pp}])."
+      + s"      fun h => ${if (preEx.isEmpty) pre.pp else CExists(preEx, pre).pp},\n"
+      + s"      [vfun (_: ${rType.pp}) h => ${if (postEx.isEmpty) post.pp else CExists(postEx, post).pp}])."
       )
   }
+
+  def vars: Seq[CVar] = programVars ++ pre.vars ++ post.vars
+
+  def programVars: Seq[CVar] = params.map(_._2) ++ pureParams.map(_._2)
 }

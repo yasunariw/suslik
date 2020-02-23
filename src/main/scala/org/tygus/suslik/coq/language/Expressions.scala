@@ -27,6 +27,11 @@ object Expressions {
         case a@CSApp(_, args, _) =>
           val acc1 = if (p(a)) acc + a.asInstanceOf[R] else acc
           args.foldLeft(acc1)((acc, arg) => collector(acc)(arg))
+        case CPointsTo(loc, _, value) =>
+          collector(collector(acc)(loc))(value)
+        case CSFormula(_, apps, ptss) =>
+          val acc1 = apps.foldLeft(acc)((a,e) => collector(a)(e))
+          ptss.foldLeft(acc1)((a,e) => collector(a)(e))
         case _ => acc
       }
 
@@ -103,6 +108,23 @@ object Expressions {
   case class CSApp(pred: String, var args: Seq[CExpr], tag: Option[Int] = Some(0)) extends CExpr {
     override def pp: String = s"$pred ${args.map(arg => arg.pp).mkString(" ")}"
     override def ppp: String = s"$pred ${args.map(arg => arg.ppp).mkString(" ")}"
+  }
+
+  case class CSFormula(heapName: String, apps: Seq[CSApp], ptss: Seq[CPointsTo]) extends CExpr {
+    override def pp: String = {
+      val ptssStr = s"$heapName = ${if (ptss.isEmpty) "empty" else ptss.map(_.pp).mkString(" \\+ ")}"
+      val appsStr =
+        if (apps.isEmpty) ""
+        else if (ptss.isEmpty) " /\\ " + apps.map { app => s"${app.pp} $heapName" }.mkString(" /\\ ")
+        else " /\\ " + apps.zipWithIndex.map { case (app, i) => s"${app.pp} $heapName${"'" * (i + 1)}" }.mkString(" /\\ ")
+
+      ptssStr + appsStr
+    }
+
+    def heapVars: Seq[CVar] =
+      if (ptss.isEmpty) Seq.empty
+      else (1 to apps.length).map(i => CVar(s"$heapName${"'" * i}"))
+    override def vars: Seq[CVar] = super.vars ++ heapVars
   }
 
   case class CExists(override val vars: Seq[CVar], e: CExpr) extends CExpr {

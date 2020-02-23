@@ -46,6 +46,7 @@ trait Synthesis extends SepLogicUtils {
           trace.root.get.stmt = Some(body)
 
           val prunedTrace = trace.pruneInvalidRuleApps
+          testPrintln(Translator.runFunSpecFromTrace(tp, prunedTrace).pp)
           val proc = Procedure(name, tp, formals, body)
           testPrintln(prunedTrace.pp)
           testPrintln(Translator.runProcedure(proc, prunedTrace).ppp)
