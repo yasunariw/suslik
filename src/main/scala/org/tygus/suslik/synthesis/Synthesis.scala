@@ -50,6 +50,7 @@ trait Synthesis extends SepLogicUtils {
           val proc = Procedure(name, tp, formals, body)
           testPrintln(prunedTrace.pp)
           testPrintln(Translator.runProcedure(proc, prunedTrace).ppp)
+          testPrintln(Translator.runProofFromTrace(prunedTrace).pp)
           Some((proc, stats))
         case None =>
           printlnErr(s"Deductive synthesis failed for the goal\n ${goal.pp},\n depth = ${config.startingDepth}.")

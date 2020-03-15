@@ -97,8 +97,10 @@ object Expressions {
   }
 
   case class CPointsTo(loc: CExpr, offset: Int = 0, value: CExpr) extends CExpr {
-    override def pp: String = s"${if (offset == 0) loc.pp else s"${loc.pp} .+ $offset"} :-> ${value.pp}"
-    override def ppp: String = s"${if (offset == 0) loc.ppp else s"${loc.ppp} .+ $offset"} :-> ${value.ppp}"
+    def locPP: String = if (offset == 0) loc.pp else s"${loc.pp} .+ $offset"
+    def locPPP: String = if (offset == 0) loc.ppp else s"${loc.ppp} .+ $offset"
+    override def pp: String = s"$locPP :-> ${value.pp}"
+    override def ppp: String = s"$locPPP :-> ${value.ppp}"
   }
 
   case object CEmpty extends CExpr {
@@ -135,6 +137,11 @@ object Expressions {
   case class CForAll(override val vars: Seq[CVar], e: CExpr) extends CExpr {
     override def pp: String = s"forall ${vars.map(v => v.pp).mkString(" ")}, ${e.pp}"
     override def ppp: String = s"forall ${vars.map(v => v.ppp).mkString(" ")}, ${e.ppp}"
+  }
+
+  case object Mystery extends CExpr {
+    override def pp: String = "_"
+    override def ppp: String = pp
   }
 
   sealed abstract class CUnOp extends ProgramPrettyPrinting

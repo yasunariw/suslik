@@ -9,13 +9,16 @@ import org.tygus.suslik.language.Expressions._
 import org.tygus.suslik.language.Statements._
 import org.tygus.suslik.logic.Specifications.{Assertion, Goal}
 import org.tygus.suslik.synthesis._
-import org.tygus.suslik.synthesis.rules.OperationalRules.FreeRule
+import org.tygus.suslik.synthesis.rules.OperationalRules._
+import org.tygus.suslik.synthesis.rules.LogicalRules._
+import org.tygus.suslik.synthesis.rules.UnfoldingRules._
 
 object Translator {
   def runProcedure(el: Procedure, trace: Trace) : CProcedure = {
     val cTp = runSSLType(el.tp)
     val cFormals = el.formals.map(runParam)
-    CProcedure(el.name, cTp, cFormals, runStmtFromTrace(trace))
+    val stmt = runStmtFromTrace(trace)
+    CProcedure(el.name, cTp, cFormals, stmt, trace.inductive)
   }
 
   def runFunSpecFromTrace(tp: SSLType, trace: Trace) : CFunSpec = {
@@ -37,6 +40,48 @@ object Translator {
     case LocType => CPtrType
     case IntSetType => CNatSeqType
     case VoidType => CUnitType
+  }
+
+  def runProofFromTrace(trace: Trace) : CProof = {
+    def next(ruleAppTrace: RuleAppTrace) : Option[RuleAppTrace] = {
+      assert(ruleAppTrace.alts.nonEmpty, "No derivation found; can only operate on a successful trace")
+      val nextSubgoals = ruleAppTrace.alts.head.subgoals
+      if (ruleAppTrace.alts.head.subgoals.nonEmpty) {
+        Some(nextSubgoals.head.ruleApps.head)
+      } else {
+        None
+      }
+    }
+
+    def traverse(ruleAppTrace: Option[RuleAppTrace]) : List[CProofStep] = {
+      if (ruleAppTrace.isEmpty) return List.empty
+      val currTrace = ruleAppTrace.get
+      currTrace.rule match {
+        case ReadRule =>
+          CRead :: traverse(next(currTrace))
+        case WriteRuleOld =>
+          assert(currTrace.alts.nonEmpty, "No derivation found; can only operate on a successful trace")
+          assert(currTrace.alts.head.alt.comp.isInstanceOf[Prepend])
+          val Prepend(comp) = currTrace.alts.head.alt.comp.asInstanceOf[Prepend]
+          assert(comp.isInstanceOf[Store])
+          val store = comp.asInstanceOf[Store]
+          CWriteOld(CPointsTo(CVar(store.to.name), store.offset, Mystery)) :: traverse(next(currTrace))
+        case EmpRule =>
+          CEmp :: traverse(next(currTrace))
+        case _ =>
+          Console.println(currTrace.rule)
+          assert(currTrace.alts.head.subgoals.length <= 1, "Shouldn't be skipping a rule app with multiple subgoals")
+          traverse(next(currTrace))
+      }
+    }
+
+    val formals = if (trace.inductive) {
+      trace.root.get.goal.programVars.map(runExpr(_).asInstanceOf[CVar])
+    } else List.empty
+    val ghosts = trace.root.get.goal.universalGhosts.map(runExpr(_).asInstanceOf[CVar]).toList
+    val ghostElim = CGhostElim(formals, ghosts)
+
+    CProof(ghostElim :: traverse(trace.root.map(_.ruleApps.head)))
   }
 
   def runStmtFromTrace(trace: Trace) : CStatement = {
@@ -146,7 +191,7 @@ object Translator {
     val ptss = el.ptss.map(pts => CPointsTo(runExpr(pts.loc), pts.offset, runExpr(pts.value)))
     CSFormula("h", apps, ptss)
   }
-  
+
   private def runUnaryExpr(el: UnaryExpr) : CExpr = el match {
     case UnaryExpr(OpNot, e) => e match {
       case BinaryExpr(OpEq, left, right) => COverloadedBinaryExpr(COpNotEqual, runExpr(left), runExpr(right))

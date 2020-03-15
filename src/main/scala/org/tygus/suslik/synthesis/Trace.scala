@@ -2,6 +2,7 @@ package org.tygus.suslik.synthesis
 
 import org.tygus.suslik.language.Statements.Statement
 import org.tygus.suslik.logic.Specifications.Goal
+import org.tygus.suslik.synthesis.rules.UnfoldingRules.InductionRule
 
 class Trace {
   var root: Option[GoalTrace] = None
@@ -9,6 +10,16 @@ class Trace {
   def init(goal: Goal) : Unit = {
     this.root = Some(GoalTrace(goal))
   }
+
+  def inductive: Boolean =
+    if (this.root.isDefined) {
+      this.root.get.ruleApps.head.rule match {
+        case InductionRule =>
+          true
+        case _ =>
+          false
+      }
+    } else false
 
   def pp: String = {
     def mkSpaces(indent: Integer) : String = " " * indent * 2

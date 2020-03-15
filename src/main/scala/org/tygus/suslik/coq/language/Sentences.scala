@@ -4,7 +4,6 @@ import org.tygus.suslik.coq.language.Expressions._
 
 case class CInductiveClause(name: String, selector: CExpr, asn: CExpr) extends PrettyPrinting {
   override def pp: String = s"| $name of ${selector.pp} of ${asn.pp}"
-
   def refreshExistentials(vars: Set[CVar]): CInductiveClause = asn match {
     case CExists(ex, asn1) =>
       val newEx = asn1.collect(_.isInstanceOf[CVar]) ++ ex.toSet -- vars
@@ -40,4 +39,8 @@ case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: 
   def vars: Seq[CVar] = programVars ++ pre.vars ++ post.vars
 
   def programVars: Seq[CVar] = params.map(_._2) ++ pureParams.map(_._2)
+}
+
+case class CProof(steps: List[CProofStep]) extends PrettyPrinting {
+  override def pp: String = s"Next Obligation.\n${steps.map(_.pp).mkString("\n")}Qed."
 }

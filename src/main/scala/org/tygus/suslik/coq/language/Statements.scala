@@ -69,7 +69,7 @@ object Statements {
           case CLoad(to, tpe, from, off) =>
             builder.append(mkSpaces(offset))
             val f = if (off <= 0) from.ppp else s"(${from.ppp} .+ $off)"
-            builder.append(s"${to.ppp} <-- !$f")
+            builder.append(s"${to.ppp} <-- @read ${tpe.pp} $f")
           case CCall(tt, fun, args) =>
             builder.append(mkSpaces(offset))
             val function_call = s"${fun.ppp} ${args.map(_.ppp).mkString(" ")}"
@@ -143,15 +143,24 @@ object Statements {
 
   case class CGuarded(cond: CExpr, body: CStatement) extends CStatement
 
-  case class CProcedure(name: String, tp: CoqType, formals: Seq[(CoqType, CVar)], body: CStatement) extends CStatement {
+  case class CProcedure(name: String, tp: CoqType, formals: Seq[(CoqType, CVar)], body: CStatement, inductive: Boolean = false) extends CStatement {
     override def pp: String = {
-      (""
-        + s"Program Definition $name : ${name}_type :=\n"
-        + s"  Fix (fun ($name : ${name}_type) ${formals.map(f => f._2.ppp).mkString(" ")} =>\n"
-        + s"    Do (\n"
-        + s"${body.ppp}"
-        + s"    ))."
-        ).stripMargin
+      val builder = new StringBuilder
+      builder.append(s"Program Definition $name : ${name}_type :=\n")
+      val fvs = formals.map(f => f._2.ppp)
+      if (inductive) {
+        builder.append(s"  Fix (fun ($name : ${name}_type) ${fvs.mkString(" ")} =>\n")
+      } else {
+        builder.append(s"  fun ${fvs.mkString(" ")} =>\n")
+      }
+      builder.append("    Do (\n")
+      builder.append(body.ppp)
+      builder.append("    )")
+      if (inductive) {
+        builder.append(")")
+      }
+      builder.append(".")
+      builder.toString()
     }
   }
 }
