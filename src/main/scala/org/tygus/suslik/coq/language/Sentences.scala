@@ -1,6 +1,7 @@
 package org.tygus.suslik.coq.language
 
 import org.tygus.suslik.coq.language.Expressions._
+import org.tygus.suslik.coq.logic.CProofStep
 import org.tygus.suslik.util.StringUtil.mkSpaces
 
 sealed abstract class Sentence extends PrettyPrinting {

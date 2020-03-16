@@ -3,6 +3,7 @@ package org.tygus.suslik.coq.translation
 import org.tygus.suslik.coq.language.Expressions._
 import org.tygus.suslik.coq.language.Statements._
 import org.tygus.suslik.coq.language._
+import org.tygus.suslik.coq.logic.{CEmp, CGhostElim, CProofStep, CRead, CWriteOld}
 import org.tygus.suslik.language._
 import org.tygus.suslik.logic._
 import org.tygus.suslik.language.Expressions._

@@ -1,6 +1,7 @@
-package org.tygus.suslik.coq.language
+package org.tygus.suslik.coq.logic
 
-import org.tygus.suslik.coq.language.Expressions.{CPointsTo, CSFormula, CVar}
+import org.tygus.suslik.coq.language.Expressions.{CPointsTo, CVar}
+import org.tygus.suslik.coq.language.{CAssertion, PrettyPrinting}
 
 sealed abstract class CProofStep extends PrettyPrinting {
   def before: String = ""
