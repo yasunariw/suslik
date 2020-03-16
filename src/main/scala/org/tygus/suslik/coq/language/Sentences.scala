@@ -1,7 +1,6 @@
 package org.tygus.suslik.coq.language
 
 import org.tygus.suslik.coq.language.Expressions._
-import org.tygus.suslik.coq.logic.CProofStep
 import org.tygus.suslik.util.StringUtil.mkSpaces
 
 sealed abstract class Sentence extends PrettyPrinting {
@@ -69,13 +68,6 @@ sealed abstract class Sentence extends PrettyPrinting {
 
         builder.append(mkSpaces(offset + 6))
         builder.append("]).")
-      case CProof(steps) =>
-        builder.append(mkSpaces(offset))
-        builder.append("Next Obligation.\n")
-        for (s <- steps) {
-          builder.append(s"${s.pp}\n")
-        }
-        builder.append("Qed.")
     }
 
     build(this, 0, vars)
@@ -101,5 +93,3 @@ case class CInductivePredicate(name: String, params: CFormals, clauses: Seq[CInd
 case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: CFormals, pre: CAssertion, post: CAssertion) extends Sentence {
   def programVars: Seq[CVar] = params.map(_._2) ++ pureParams.map(_._2)
 }
-
-case class CProof(steps: List[CProofStep]) extends Sentence

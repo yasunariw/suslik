@@ -3,7 +3,7 @@ package org.tygus.suslik.coq.translation
 import org.tygus.suslik.coq.language.Expressions._
 import org.tygus.suslik.coq.language.Statements._
 import org.tygus.suslik.coq.language._
-import org.tygus.suslik.coq.logic.{CEmp, CGhostElim, CProofStep, CRead, CWriteOld}
+import org.tygus.suslik.coq.logic.{CEmp, CEnvironment, CGhostElim, CGoal, CProof, CProofStep, CRead, CWriteOld}
 import org.tygus.suslik.language._
 import org.tygus.suslik.logic._
 import org.tygus.suslik.language.Expressions._
@@ -43,47 +43,45 @@ object Translator {
     case VoidType => CUnitType
   }
 
+  def runGoal(goal: Goal): CGoal = {
+    val pre = runAsn(goal.pre)
+    val post = runAsn(goal.post)
+    val gamma = goal.gamma.map { case (value, lType) => (CVar(value.name), runSSLType(lType)) }
+    val programVars = goal.programVars.map(v => CVar(v.name))
+    val universalGhosts = goal.universalGhosts.map(v => CVar(v.name)).toSeq
+    CGoal(pre, post, gamma, programVars, universalGhosts, goal.fname)
+  }
+
   def runProofFromTrace(trace: Trace): CProof = {
-    def next(ruleAppTrace: RuleAppTrace): Option[RuleAppTrace] = {
-      assert(ruleAppTrace.alts.nonEmpty, "No derivation found; can only operate on a successful trace")
-      val nextSubgoals = ruleAppTrace.alts.head.subgoals
-      if (ruleAppTrace.alts.head.subgoals.nonEmpty) {
-        Some(nextSubgoals.head.ruleApps.head)
-      } else {
-        None
-      }
-    }
+    val inductive = trace.inductive
 
-    def traverse(ruleAppTrace: Option[RuleAppTrace]): List[CProofStep] = {
-      if (ruleAppTrace.isEmpty) return List.empty
-      val currTrace = ruleAppTrace.get
-      currTrace.rule match {
-        case ReadRule =>
-          CRead :: traverse(next(currTrace))
-        case WriteRuleOld =>
-          assert(currTrace.alts.nonEmpty, "No derivation found; can only operate on a successful trace")
-          assert(currTrace.alts.head.alt.comp.isInstanceOf[Prepend])
-          val Prepend(comp) = currTrace.alts.head.alt.comp.asInstanceOf[Prepend]
-          assert(comp.isInstanceOf[Store])
-          val store = comp.asInstanceOf[Store]
-          CWriteOld(CPointsTo(CVar(store.to.name), store.offset, Mystery)) :: traverse(next(currTrace))
+    def traverse(goalTrace: GoalTrace, env: CEnvironment): CProofStep = {
+      val ruleAppTrace = goalTrace.ruleApps.find(!_.isFail)
+      assert(ruleAppTrace.isDefined, s"No successful rule application found for goal ${goalTrace.goal.pp}")
+      assert(ruleAppTrace.get.alts.nonEmpty, s"No derivation found for rule app ${ruleAppTrace.get.rule}")
+      val subderiv = ruleAppTrace.get.alts.head
+      val env = CEnvironment(runGoal(goalTrace.goal), Map.empty, inductive)
+      ruleAppTrace.get.rule match {
         case EmpRule =>
-          CEmp :: traverse(next(currTrace))
-        case _ =>
-          Console.println(currTrace.rule)
-          assert(currTrace.alts.head.subgoals.length <= 1, "Shouldn't be skipping a rule app with multiple subgoals")
-          traverse(next(currTrace))
+          CProofStep(CEmp, env, subderiv.subgoals.map(t => traverse(t, env)))
+        case ReadRule =>
+          CProofStep(CRead, env, subderiv.subgoals.map(t => traverse(t, env)))
+        case WriteRuleOld =>
+          assert(subderiv.alt.comp.isInstanceOf[Prepend], s"Computation must be of type 'Prepend' for subderivation ${subderiv}")
+          val Prepend(comp) = subderiv.alt.comp.asInstanceOf[Prepend]
+          val store = comp.asInstanceOf[Store]
+          val to = runExpr(store.to).asInstanceOf[CVar]
+          CProofStep(CWriteOld(to), env, subderiv.subgoals.map(t => traverse(t, env)))
+        case rule =>
+          Console.println(rule)
+          assert(subderiv.subgoals.length <= 1, "Shouldn't be skipping a rule app with multiple subgoals")
+          traverse(subderiv.subgoals.head, env)
       }
     }
 
-    val formals = if (trace.inductive) {
-      trace.root.get.goal.programVars.map(runExpr(_).asInstanceOf[CVar])
-    } else List.empty
-    val goal = trace.root.get.goal
-    val ghosts = goal.universalGhosts.map(runExpr(_).asInstanceOf[CVar]).toList
-    val ghostElim = CGhostElim(formals, ghosts, runAsn(goal.pre))
-
-    CProof(ghostElim :: traverse(trace.root.map(_.ruleApps.head)))
+    val root = trace.root.get
+    val env = CEnvironment(runGoal(root.goal), Map.empty, inductive)
+    CProof(CProofStep(CGhostElim, env, Seq(traverse(root, env))))
   }
 
   def runStmtFromTrace(trace: Trace): CStatement = {
