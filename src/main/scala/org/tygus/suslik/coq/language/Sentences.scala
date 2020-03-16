@@ -1,46 +1,104 @@
 package org.tygus.suslik.coq.language
 
 import org.tygus.suslik.coq.language.Expressions._
+import org.tygus.suslik.util.StringUtil.mkSpaces
 
-case class CInductiveClause(name: String, selector: CExpr, asn: CExpr) extends PrettyPrinting {
-  override def pp: String = s"| $name of ${selector.pp} of ${asn.pp}"
-  def refreshExistentials(vars: Set[CVar]): CInductiveClause = asn match {
-    case CExists(ex, asn1) =>
-      val newEx = asn1.collect(_.isInstanceOf[CVar]) ++ ex.toSet -- vars
-      if (newEx.isEmpty) this.copy() else CInductiveClause(name, selector, CExists(newEx.toSeq, asn1))
-    case _ =>
-      val ex = asn.collect(_.isInstanceOf[CVar]) -- vars
-      if (ex.isEmpty) this.copy() else CInductiveClause(name, selector, CExists(ex.toSeq, asn))
+sealed abstract class Sentence extends PrettyPrinting {
+  def vars: Seq[CVar] = this match {
+    case CInductivePredicate(_, params, _) => params.map(_._2)
+    case _ => Seq.empty
   }
-}
 
-case class CInductivePredicate(name: String, params: CFormals, clauses: Seq[CInductiveClause]) extends PrettyPrinting {
-  override def pp: String =
-    s"Inductive $name ${params.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")} : Prop :=\n${clauses.map(_.pp).mkString("\n")}."
-
-  def refreshExistentials: CInductivePredicate = {
-    CInductivePredicate(name, params, clauses.map(_.refreshExistentials(params.map(_._2).toSet)))
-  }
-}
-
-case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: CFormals, pre: CExpr, post: CExpr) extends PrettyPrinting {
   override def pp: String = {
-    val preEx = pre.vars.filterNot(programVars.contains)
-    val postEx = post.vars.filterNot(programVars.contains)
-    (""
-      + s"Definition ${name}_type ${params.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")} :=\n"
-      + (if (pureParams.isEmpty) "" else s"  {${pureParams.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")}},\n")
-      + s"    STsep (\n"
-      + s"      fun h => ${if (preEx.isEmpty) pre.pp else CExists(preEx, pre).pp},\n"
-      + s"      [vfun (_: ${rType.pp}) h => ${if (postEx.isEmpty) post.pp else CExists(postEx, post).pp}])."
-      )
+    val builder = new StringBuilder()
+
+    def build(el: Sentence, offset: Int = 0, vars: Seq[CVar] = Seq.empty) : Unit = el match {
+      case el@CAssertion(phi, sigma) =>
+        val ve = (el.spatialEx ++ el.pureEx).diff(vars).distinct
+        val he = el.heapEx
+        // existentials
+        if (ve.nonEmpty) {
+          builder.append(mkSpaces(offset))
+          builder.append(s"exists ${ve.map(_.pp).mkString(" ")},\n")
+        }
+        if (he.nonEmpty) {
+          builder.append(mkSpaces(offset))
+          builder.append(s"exists ${he.map(_.pp).mkString(" ")},\n")
+        }
+        // body
+        builder.append(mkSpaces(offset + 2))
+        builder.append(s"${phi.pp} /\\ ${sigma.pp}")
+      case CInductiveClause(name, selector, asn) =>
+        builder.append(mkSpaces(offset))
+        builder.append(s"| $name of ${selector.pp} of\n")
+        build(asn, offset + 2, vars)
+      case CInductivePredicate(name, params, clauses) =>
+        builder.append(mkSpaces(offset))
+        builder.append(s"Inductive $name ${params.map{ case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")} : Prop :=\n")
+        for (c <- clauses) {
+          build(c, offset, vars)
+          builder.append("\n")
+        }
+        builder.append(".")
+      case el@CFunSpec(name, rType, params, pureParams, pre, post) =>
+        builder.append(mkSpaces(offset))
+        builder.append(s"Definition ${name}_type ${params.map { case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")} :=\n")
+
+        // print pure params
+        if (pureParams.nonEmpty) {
+          builder.append(mkSpaces(offset + 2))
+          builder.append(s"{${pureParams.map { case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")}},\n")
+        }
+
+        // define goal
+        builder.append(mkSpaces(offset + 4))
+        builder.append("STsep (\n")
+
+        // pre-condition
+        builder.append(mkSpaces(offset + 6))
+        builder.append("fun h =>\n")
+        build(pre, offset + 8, el.programVars)
+        builder.append(",\n")
+
+        // post-condition
+        builder.append(mkSpaces(offset + 6))
+        builder.append(s"[vfun (_: ${rType.pp}) h =>\n")
+        build(post, offset + 8, el.programVars)
+        builder.append(",\n")
+
+        builder.append(mkSpaces(offset + 6))
+        builder.append("]).")
+      case CProof(steps) =>
+        builder.append(mkSpaces(offset))
+        builder.append("Next Obligation.\n")
+        for (s <- steps) {
+          builder.append(s"${s.pp}\n")
+        }
+        builder.append("Qed.")
+    }
+
+    build(this, 0, vars)
+    builder.toString()
   }
+}
 
-  def vars: Seq[CVar] = programVars ++ pre.vars ++ post.vars
+case class CAssertion(phi: CExpr, sigma: CSFormula) extends Sentence {
+  def pureEx: Seq[CVar] =
+    phi.collect(_.isInstanceOf[CVar]).toSeq
 
+  def spatialEx: Seq[CVar] =
+    sigma.collect(_.isInstanceOf[CVar]).toSeq
+
+  def heapEx: Seq[CVar] =
+    sigma.heapVars
+}
+
+case class CInductiveClause(name: String, selector: CExpr, asn: CAssertion) extends Sentence
+
+case class CInductivePredicate(name: String, params: CFormals, clauses: Seq[CInductiveClause]) extends Sentence
+
+case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: CFormals, pre: CAssertion, post: CAssertion) extends Sentence {
   def programVars: Seq[CVar] = params.map(_._2) ++ pureParams.map(_._2)
 }
 
-case class CProof(steps: List[CProofStep]) extends PrettyPrinting {
-  override def pp: String = s"Next Obligation.\n${steps.map(_.pp).mkString("\n")}Qed."
-}
+case class CProof(steps: List[CProofStep]) extends Sentence

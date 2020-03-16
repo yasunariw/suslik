@@ -14,24 +14,24 @@ import org.tygus.suslik.synthesis.rules.LogicalRules._
 import org.tygus.suslik.synthesis.rules.UnfoldingRules._
 
 object Translator {
-  def runProcedure(el: Procedure, trace: Trace) : CProcedure = {
+  def runProcedure(el: Procedure, trace: Trace): CProcedure = {
     val cTp = runSSLType(el.tp)
     val cFormals = el.formals.map(runParam)
     val stmt = runStmtFromTrace(trace)
     CProcedure(el.name, cTp, cFormals, stmt, trace.inductive)
   }
 
-  def runFunSpecFromTrace(tp: SSLType, trace: Trace) : CFunSpec = {
+  def runFunSpecFromTrace(tp: SSLType, trace: Trace): CFunSpec = {
     val root = trace.root.get
     val goal = root.goal
     val pureParams = goal.universalGhosts.map(v => runParam((goal.gamma(v), v))).toList
-    CFunSpec(goal.fname, runSSLType(tp), goal.formals.map(runParam), pureParams, runAsn(goal.pre).simplify, runAsn(goal.post).simplify)
+    CFunSpec(goal.fname, runSSLType(tp), goal.formals.map(runParam), pureParams, runAsn(goal.pre), runAsn(goal.post))
   }
 
-  def runInductivePredicate(el: InductivePredicate) : CInductivePredicate = {
+  def runInductivePredicate(el: InductivePredicate): CInductivePredicate = {
     val cParams = el.params.map(runParam) :+ (CHeapType, CVar("h"))
     val cClauses = el.clauses.zipWithIndex.map { case (c, i) => runClause(s"${el.name}$i", c) }
-    CInductivePredicate(el.name, cParams, cClauses).refreshExistentials
+    CInductivePredicate(el.name, cParams, cClauses)
   }
 
   def runSSLType(el: SSLType): CoqType = el match {
@@ -42,8 +42,8 @@ object Translator {
     case VoidType => CUnitType
   }
 
-  def runProofFromTrace(trace: Trace) : CProof = {
-    def next(ruleAppTrace: RuleAppTrace) : Option[RuleAppTrace] = {
+  def runProofFromTrace(trace: Trace): CProof = {
+    def next(ruleAppTrace: RuleAppTrace): Option[RuleAppTrace] = {
       assert(ruleAppTrace.alts.nonEmpty, "No derivation found; can only operate on a successful trace")
       val nextSubgoals = ruleAppTrace.alts.head.subgoals
       if (ruleAppTrace.alts.head.subgoals.nonEmpty) {
@@ -53,7 +53,7 @@ object Translator {
       }
     }
 
-    def traverse(ruleAppTrace: Option[RuleAppTrace]) : List[CProofStep] = {
+    def traverse(ruleAppTrace: Option[RuleAppTrace]): List[CProofStep] = {
       if (ruleAppTrace.isEmpty) return List.empty
       val currTrace = ruleAppTrace.get
       currTrace.rule match {
@@ -78,14 +78,15 @@ object Translator {
     val formals = if (trace.inductive) {
       trace.root.get.goal.programVars.map(runExpr(_).asInstanceOf[CVar])
     } else List.empty
-    val ghosts = trace.root.get.goal.universalGhosts.map(runExpr(_).asInstanceOf[CVar]).toList
-    val ghostElim = CGhostElim(formals, ghosts)
+    val goal = trace.root.get.goal
+    val ghosts = goal.universalGhosts.map(runExpr(_).asInstanceOf[CVar]).toList
+    val ghostElim = CGhostElim(formals, ghosts, runAsn(goal.pre))
 
     CProof(ghostElim :: traverse(trace.root.map(_.ruleApps.head)))
   }
 
-  def runStmtFromTrace(trace: Trace) : CStatement = {
-    def traverse(goalTrace: GoalTrace) : CStatement = {
+  def runStmtFromTrace(trace: Trace): CStatement = {
+    def traverse(goalTrace: GoalTrace): CStatement = {
       val subgoals = goalTrace.ruleApps.head.alts.head.subgoals.reverse
       goalTrace.ruleApps.head.alts.head.alt.comp match {
         case PureKont =>
@@ -130,7 +131,7 @@ object Translator {
     }
   }
 
-  private def runStmt(el: Statement, goal: Goal) : CStatement = el match {
+  private def runStmt(el: Statement, goal: Goal): CStatement = el match {
     case Skip => CSkip
     case Hole => ???
     case Error => ???
@@ -149,7 +150,7 @@ object Translator {
     case Store(to, offset, expr) =>
       CStore(CVar(to.name), offset, runExpr(expr))
     case Call(to, fun, args) =>
-      CCall(to.map { case (v, t) => (CVar(v.name), runSSLType(t))}, CVar(fun.name), args.map(runExpr))
+      CCall(to.map { case (v, t) => (CVar(v.name), runSSLType(t)) }, CVar(fun.name), args.map(runExpr))
     case SeqComp(s1, s2) =>
       CSeqComp(runStmt(s1, goal), runStmt(s2, goal))
     case If(cond, tb, eb) =>
@@ -166,8 +167,10 @@ object Translator {
     case (VoidType, Var(name)) => (CUnitType, CVar(name))
   }
 
-  private def runClause(name: String, el: InductiveClause): CInductiveClause =
-    CInductiveClause(name, runExpr(el.selector), runAsn(el.asn))
+  private def runClause(name: String, el: InductiveClause): CInductiveClause = {
+    val selector = runExpr(el.selector)
+    CInductiveClause(name, selector, runAsn(el.asn))
+  }
 
   private def runExpr(el: Expr): CExpr = el match {
     case Var(name) => CVar(name)
@@ -180,15 +183,17 @@ object Translator {
     case IfThenElse(c, t, e) => CIfThenElse(runExpr(c), runExpr(t), runExpr(e))
   }
 
-  private def runAsn(el: Assertion): CExpr =
-    CBinaryExpr(COpAnd, runExpr(el.phi), runSFormula(el.sigma))
+  private def runHeaplet(el: Heaplet): CExpr = el match {
+    case PointsTo(loc, offset, value) => CPointsTo(runExpr(loc), offset, runExpr(value))
+    case SApp(pred, args, tag) => CSApp(pred, args.map(runExpr), tag)
+  }
 
-  private def runSFormula(el: SFormula): CExpr = {
-    val apps = el.apps.map(app => CSApp(
-      app.pred,
-      app.args.map(runExpr),
-      app.tag))
-    val ptss = el.ptss.map(pts => CPointsTo(runExpr(pts.loc), pts.offset, runExpr(pts.value)))
+  private def runAsn(el: Assertion): CAssertion =
+    CAssertion(runExpr(el.phi), runSFormula(el.sigma))
+
+  private def runSFormula(el: SFormula): CSFormula = {
+    val ptss = el.ptss.map(runHeaplet).asInstanceOf[List[CPointsTo]]
+    val apps = el.apps.map(runHeaplet).asInstanceOf[List[CSApp]]
     CSFormula("h", apps, ptss)
   }
 

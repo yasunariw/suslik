@@ -1,6 +1,6 @@
 package org.tygus.suslik.coq.language
 
-import org.tygus.suslik.coq.language.Expressions.{CPointsTo, CVar}
+import org.tygus.suslik.coq.language.Expressions.{CPointsTo, CSFormula, CVar}
 
 sealed abstract class CProofStep extends PrettyPrinting {
   def before: String = ""
@@ -9,27 +9,47 @@ sealed abstract class CProofStep extends PrettyPrinting {
   override def pp: String = List(before, op, after).filterNot(_.isEmpty).mkString("\n")
 }
 
-case class CGhostElim(formals: List[CVar], ghosts: List[CVar]) extends CProofStep {
+case class CGhostElim(formals: List[CVar], ghosts: List[CVar], asn: CAssertion) extends CProofStep {
   override def before: String = "ssl_ghostelim_pre."
   override def op: String = {
     if (ghosts.isEmpty) return ""
     val builder = new StringBuilder()
     builder.append("move=>")
-    def introBuilder(vars: List[CVar]): String = vars match {
-      case v1 :: Nil =>
-        v1.pp
-      case v1 :: v2 :: vars1 =>
-        vars1.foldLeft(s"[${v1.pp} ${v2.pp}]"){ case (acc, v) => s"[$acc $v]" }
-    }
 
     formals match {
-      case Nil => builder.append(introBuilder(ghosts))
-      case _ => builder.append(s"[${introBuilder(formals)} ${introBuilder(ghosts)}]")
+      case Nil => builder.append(nestedDestruct(ghosts))
+      case _ => builder.append(s"[${nestedDestruct(formals)} ${nestedDestruct(ghosts)}]")
     }
     builder.append("//=.")
     builder.toString()
   }
-  override def after: String = "ssl_ghostelim_post."
+  override def after: String = {
+    val ptss = asn.sigma.ptss
+    val apps = asn.sigma.apps
+
+    val hFromPre = if (apps.nonEmpty) {
+      val hApps = nestedDestruct(apps.map(app => CVar(s"H${app.pred}")))
+      if (ptss.nonEmpty) {
+        s"[-> $hApps]"
+      } else {
+        hApps
+      }
+    } else if (ptss.nonEmpty) {
+      "->"
+    }
+    val builder = new StringBuilder()
+    builder.append("move=>")
+    builder.append(hFromPre)
+    builder.append(" HValid.")
+    builder.toString()
+  }
+
+  private def nestedDestruct(items: Seq[CVar]): String = items match {
+    case v1 :: Nil =>
+      v1.pp
+    case v1 :: v2 :: vars1 =>
+      vars1.foldLeft(s"[${v1.pp} ${v2.pp}]"){ case (acc, v) => s"[$acc $v]" }
+  }
 }
 
 sealed abstract class CFailRuleApp extends CProofStep
@@ -60,4 +80,6 @@ case object CRead extends COperationalRuleApp {
   override def op: String = "ssl_read."
 }
 case object CAlloc extends COperationalRuleApp
-case object CFreeStep extends COperationalRuleApp
+case object CFreeStep extends COperationalRuleApp {
+  override def op: String = "ssl_dealloc."
+}

@@ -114,7 +114,7 @@ object Expressions {
 
   case class CSFormula(heapName: String, apps: Seq[CSApp], ptss: Seq[CPointsTo]) extends CExpr {
     override def pp: String = {
-      val ptssStr = s"$heapName = ${if (ptss.isEmpty) "empty" else ptss.map(_.pp).mkString(" \\+ ")}"
+      val ptssStr = s"$heapName = ${if (ptss.isEmpty) "empty" else (ptss ++ heapVars).map(_.pp).mkString(" \\+ ")}"
       val appsStr =
         if (apps.isEmpty) ""
         else if (ptss.isEmpty) " /\\ " + apps.map { app => s"${app.pp} $heapName" }.mkString(" /\\ ")
