@@ -7,7 +7,7 @@ sealed abstract class CRuleApp {
   val before: Option[String] = None
   val op: Option[String] = None
   val after: Seq[String] = Seq.empty
-  def updateEnv(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = Seq(env)
+  def nextEnvs(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = Seq(env)
   protected def nestedDestruct(items: Seq[CVar]): String = items.toList match {
     case v1 :: v2 :: rest =>
       s"[${v1.pp} ${nestedDestruct(v2 :: rest)}]"
@@ -54,7 +54,7 @@ case class CGhostElim(env: CEnvironment) extends CRuleApp {
     Seq(builder.toString())
   }
 
-  override def updateEnv(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = {
+  override def nextEnvs(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = {
     val goal = env.goal
     val gamma = goal.gamma
     val universalGhosts = goal.universalGhosts.map(v => (v, gamma.getOrElse(v, CUnitType))).toMap
@@ -137,7 +137,7 @@ case class COpen(env: CEnvironment, selectors: Seq[CExpr], app: CSApp) extends C
     })
   }
 
-  override def updateEnv(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = {
+  override def nextEnvs(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = {
     val goal = env.goal
     val gamma = goal.gamma
     selectors.map(selector => {
@@ -168,6 +168,6 @@ case class CCallRuleApp(env: CEnvironment, fun: String, args: Seq[CVar], sub: Ma
   override val op: Option[String] =
     Some(s"apply: val_do=>//= _ ? ->; rewrite unitL=>_.")
 
-  override def updateEnv(env: CEnvironment, goal: CGoal): Seq[CEnvironment] =
+  override def nextEnvs(env: CEnvironment, goal: CGoal): Seq[CEnvironment] =
     Seq(env.copy(callHeapVars = env.callHeapVars.tail))
 }
