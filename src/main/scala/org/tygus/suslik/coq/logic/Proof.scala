@@ -1,57 +1,63 @@
 package org.tygus.suslik.coq.logic
 
 import org.tygus.suslik.coq.language.Expressions._
-import org.tygus.suslik.coq.language.{CAssertion, CoqType, PrettyPrinting}
+import org.tygus.suslik.coq.language.{CAssertion, CFunSpec, CPredicateEnv, CoqType, PrettyPrinting}
+import org.tygus.suslik.language.SSLType
 import org.tygus.suslik.util.StringUtil.mkSpaces
+
+trait ProofContextItem
 
 case class CGoal(pre: CAssertion,
                  post: CAssertion,
                  gamma: Map[CVar, CoqType],
                  programVars: Seq[CVar],
                  universalGhosts: Seq[CVar],
-                 fname: String) {
+                 fname: String)
 
+case class CEnvironment(goal: CGoal,
+                        spec: CFunSpec,
+                        ctx: ProofContext,
+                        predicates: CPredicateEnv,
+                        callHeapVars: Seq[CVar],
+                        inductive: Boolean) {
+  def copy(goal: CGoal = this.goal,
+           spec: CFunSpec = this.spec,
+           ctx: ProofContext = this.ctx,
+           predicates: CPredicateEnv = this.predicates,
+           callHeapVars: Seq[CVar] = this.callHeapVars,
+           inductive: Boolean = this.inductive): CEnvironment =
+    CEnvironment(goal, spec, ctx, predicates, callHeapVars, inductive)
 
+  def apps: Seq[CSApp] =
+    (goal.pre.sigma.collect(_.isInstanceOf[CSApp])
+      ++ goal.post.sigma.collect(_.isInstanceOf[CSApp])).toSeq
 }
 
-case class CEnvironment(goal: CGoal, vars: Map[String, CExpr], inductive: Boolean)
-
-case class CProofStep(app: CRuleApp, env: CEnvironment, next: Seq[CProofStep]) extends PrettyPrinting {
-  override def pp: String = {
-    val builder = new StringBuilder()
-    val before = app.before(env)
-    val op = app.op(env)
-    val after = app.after(env)
-    if (before.isDefined) {
-      builder.append(before.get)
-      builder.append("\n")
-    }
-    if (op.isDefined) {
-      builder.append(op.get)
-      builder.append("\n")
-    }
-    if (after.isDefined) {
-      builder.append(after.get)
-      builder.append("\n")
-    }
-    builder.toString()
-  }
+case class CProofStep(app: CRuleApp, env: CEnvironment, next: Seq[CProofStep]) {
+  def before: Option[String] = app.before(env)
+  def op: Option[String] = app.op(env)
+  def after: Seq[String] = app.after(env)
 }
-
 case class CProof(root: CProofStep) extends PrettyPrinting {
   override def pp: String = {
     val builder = new StringBuilder()
-    def build(step: CProofStep, offset: Int = 0): Unit = {
-      builder.append(mkSpaces(offset))
-      builder.append(step.pp)
-      if (step.next.length == 1) {
-        build(step.next.head, offset)
-      } else {
-        step.next.foreach(n => build(n, offset + 2))
+    def build(prev: Option[String], step: CProofStep): Unit = {
+      if (prev.isDefined)
+        builder.append(s"${prev.get}\n")
+      builder.append(step.before.map(s => s"$s\n").getOrElse(""))
+      builder.append(step.op.map(s => s"$s\n").getOrElse(""))
+      step.next.toList match {
+        case _ :: _ :: _ =>
+          step.next.zip(step.after).foreach { case(n, after) => build(Some(after), n) }
+        case n :: _ =>
+          build(step.after.headOption, n)
+        case Nil =>
+          builder.append(step.after.mkString("\n"))
+          builder.append("\n")
       }
     }
     builder.append("Next Obligation.\n")
-    build(root)
+    build(None, root)
     builder.append("Qed.\n")
     builder.toString()
   }

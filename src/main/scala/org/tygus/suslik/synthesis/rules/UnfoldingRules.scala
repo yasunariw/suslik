@@ -72,7 +72,7 @@ object UnfoldingRules extends SepLogicUtils with RuleUtils {
           case None => None
           case Some(selGoals) =>
             val (selectors, subGoals) = selGoals.unzip
-            Some(Subderivation(subGoals, kont(selectors), MakeOpen(selectors)))
+            Some(Subderivation(subGoals, kont(selectors), MakeOpen(selectors, h.asInstanceOf[SApp])))
         }
       } yield s
     }
@@ -209,7 +209,7 @@ object UnfoldingRules extends SepLogicUtils with RuleUtils {
       } yield {
         val stmt = Call(None, Var(f.name), args)
         val kont: StmtProducer = prepend(stmt, toString)
-        Subderivation(List(callGoal), kont, Prepend(stmt))
+        Subderivation(List(callGoal), kont, PrependCall(stmt, sub))
       }).toSeq
     }
 

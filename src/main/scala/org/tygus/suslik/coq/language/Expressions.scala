@@ -1,8 +1,10 @@
 package org.tygus.suslik.coq.language
 
+import org.tygus.suslik.coq.logic.ProofContextItem
+
 object Expressions {
 
-  sealed abstract class CExpr extends ProgramPrettyPrinting {
+  sealed abstract class CExpr extends ProgramPrettyPrinting with ProofContextItem {
     def collect[R <: CExpr](p: CExpr => Boolean): Set[R] = {
 
       def collector(acc: Set[R])(exp: CExpr): Set[R] = exp match {
@@ -82,16 +84,35 @@ object Expressions {
   }
 
   case class CBinaryExpr(op: CBinOp, left: CExpr, right: CExpr) extends CExpr {
+    override def equals(that: Any): Boolean = that match {
+      case CUnaryExpr(COpNot, COverloadedBinaryExpr(COpOverloadedEq, left1, right1)) => left == left1 && right == right1
+      case CBinaryExpr(op1, left1, right1) => op == op1 && left == left1 && right == right1
+      case COverloadedBinaryExpr(op1, left1, right1) => op == op1 && left == left1 && right == right1
+      case _ => false
+    }
     override def pp: String = s"${left.pp} ${op.pp} ${right.pp}"
     override def ppp: String = s"${left.ppp} ${op.ppp} ${right.ppp}"
   }
 
   case class CUnaryExpr(op: CUnOp, e: CExpr) extends CExpr {
+    override def equals(that: Any): Boolean = that match {
+      case CUnaryExpr(op1, e1) => op == op1 && e == e1
+      case COverloadedBinaryExpr(COpNotEqual, left, right) => e match {
+        case COverloadedBinaryExpr(COpOverloadedEq, left1, right1) => left == left1 && right == right1
+        case _ => false
+      }
+      case _ => false
+    }
     override def pp: String = s"${op.pp} ${e.pp}"
     override def ppp: String = s"${op.ppp} ${e.ppp}"
   }
 
   case class COverloadedBinaryExpr(op: COverloadedBinOp, left: CExpr, right: CExpr) extends CExpr {
+    override def equals(that: Any): Boolean = that match {
+      case CBinaryExpr(op1, left1, right1) => op == op1 && left == left1 && right == right1
+      case COverloadedBinaryExpr(op1, left1, right1) => op == op1 && left == left1 && right == right1
+      case _ => false
+    }
     override def pp: String = s"${left.pp} ${op.pp} ${right.pp}"
     override def ppp: String = s"${left.ppp} ${op.ppp} ${right.ppp}"
   }
@@ -157,6 +178,11 @@ object Expressions {
   sealed abstract class CBinOp extends COverloadedBinOp
 
   object COpOverloadedEq extends COverloadedBinOp {
+    override def equals(that: Any): Boolean = that match {
+      case that: COpEq.type => true
+      case that: COpOverloadedEq.type => true
+      case _ => false
+    }
     override def pp: String = "="
   }
 
@@ -205,6 +231,11 @@ object Expressions {
   }
 
   object COpEq extends CBinOp {
+    override def equals(that: Any): Boolean = that match {
+      case that: COpEq.type => true
+      case that: COpOverloadedEq.type => true
+      case _ => false
+    }
     override def pp: String = "="
     override def ppp: String = "=="
   }

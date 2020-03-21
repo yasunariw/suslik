@@ -1,10 +1,11 @@
 package org.tygus.suslik.synthesis
 
 import org.tygus.suslik.language.Statements.Statement
+import org.tygus.suslik.logic.FunSpec
 import org.tygus.suslik.logic.Specifications.Goal
 import org.tygus.suslik.synthesis.rules.UnfoldingRules.InductionRule
 
-class Trace {
+class Trace(val spec: FunSpec) {
   var root: Option[GoalTrace] = None
 
   def init(goal: Goal) : Unit = {
@@ -62,7 +63,7 @@ class Trace {
         newR.alts = r.alts.map(traverse).asInstanceOf[List[SubderivationTrace]]
         newR
     }
-    val newTrace = new Trace
+    val newTrace = new Trace(spec)
     newTrace.root = root.map(r => traverse(r).asInstanceOf[GoalTrace])
     newTrace
   }

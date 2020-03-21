@@ -1,7 +1,8 @@
 package org.tygus.suslik.synthesis
 
-import org.tygus.suslik.language.Expressions.{Expr, PFormula}
+import org.tygus.suslik.language.Expressions.{Expr, PFormula, Var}
 import org.tygus.suslik.language.Statements._
+import org.tygus.suslik.logic.SApp
 
 sealed abstract class StmtComputation {
   def run(stmts: Seq[Statement]): Statement
@@ -12,6 +13,13 @@ case object PureKont extends StmtComputation {
 }
 
 case class Prepend(s: Statement) extends StmtComputation {
+  override def run(stmts: Seq[Statement]): Statement = {
+    val rest = stmts.head
+    SeqComp(s, rest).simplify
+  }
+}
+
+case class PrependCall(s: Statement, sub: Map[Var, Expr]) extends StmtComputation {
   override def run(stmts: Seq[Statement]): Statement = {
     val rest = stmts.head
     SeqComp(s, rest).simplify
@@ -48,7 +56,7 @@ case class MakeGuarded(cond: Expr) extends StmtComputation {
   override def run(stmts: Seq[Statement]): Statement = Guarded(cond, stmts.head)
 }
 
-case class MakeOpen(selectors: Seq[PFormula]) extends StmtComputation {
+case class MakeOpen(selectors: Seq[PFormula], app: SApp) extends StmtComputation {
   override def run(stmts: Seq[Statement]): Statement = {
     if (stmts.length == 1) stmts.head else {
       val cond_branches = selectors.zip(stmts).reverse

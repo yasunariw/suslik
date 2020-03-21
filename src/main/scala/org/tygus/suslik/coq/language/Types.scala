@@ -1,6 +1,8 @@
 package org.tygus.suslik.coq.language
 
-sealed abstract class CoqType extends PrettyPrinting
+import org.tygus.suslik.coq.logic.ProofContextItem
+
+sealed abstract class CoqType extends PrettyPrinting with ProofContextItem
 
 case object CBoolType extends CoqType {
   override def pp: String = "bool"

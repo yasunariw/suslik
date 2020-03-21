@@ -38,7 +38,7 @@ trait Synthesis extends SepLogicUtils {
     printLog(List(("Initial specification:", Console.BLACK), (s"${goal.pp}\n", Console.BLUE)))(i = 0, config)
     val stats = new SynStats()
     SMTSolving.init()
-    val trace = new Trace
+    val trace = new Trace(spec)
     trace.init(goal)
     try {
       synthesize(goal, config.startingDepth, trace.root.get)(stats = stats, rules = nextRules(goal, config.startingDepth)) match {
@@ -46,11 +46,11 @@ trait Synthesis extends SepLogicUtils {
           trace.root.get.stmt = Some(body)
 
           val prunedTrace = trace.pruneInvalidRuleApps
-          testPrintln(Translator.runFunSpecFromTrace(tp, prunedTrace).pp)
+          testPrintln(Translator.runFunSpecFromTrace(prunedTrace).pp)
           val proc = Procedure(name, tp, formals, body)
           testPrintln(prunedTrace.pp)
           testPrintln(Translator.runProcedure(proc, prunedTrace).ppp)
-          testPrintln(Translator.runProofFromTrace(prunedTrace).pp)
+          testPrintln(Translator.runProofFromTrace(prunedTrace, env.predicates).pp)
           Some((proc, stats))
         case None =>
           printlnErr(s"Deductive synthesis failed for the goal\n ${goal.pp},\n depth = ${config.startingDepth}.")
