@@ -5,22 +5,18 @@ import org.tygus.suslik.logic.FunSpec
 import org.tygus.suslik.logic.Specifications.Goal
 import org.tygus.suslik.synthesis.rules.UnfoldingRules.InductionRule
 
+object Trace {
+  def init(spec: FunSpec, goal: Goal): Trace = {
+    val trace = new Trace(spec)
+    trace.root = Some(GoalTrace(goal))
+    trace
+  }
+}
+
 class Trace(val spec: FunSpec) {
   var root: Option[GoalTrace] = None
 
-  def init(goal: Goal) : Unit = {
-    this.root = Some(GoalTrace(goal))
-  }
-
-  def inductive: Boolean =
-    if (this.root.isDefined) {
-      this.root.get.ruleApps.head.rule match {
-        case InductionRule =>
-          true
-        case _ =>
-          false
-      }
-    } else false
+  def inductive: Boolean = this.root.exists(_.ruleApps.head.rule.isInstanceOf[InductionRule.type])
 
   def pp: String = {
     def mkSpaces(indent: Integer) : String = " " * indent * 2

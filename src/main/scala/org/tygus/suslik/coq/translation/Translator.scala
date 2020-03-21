@@ -64,16 +64,16 @@ object Translator {
       ruleAppTrace.get.rule match {
         case EmpRule =>
           val nextEnv = CEmp.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(CEmp, env, subderiv.subgoals.reverse.zip(nextEnv).map {
+          CProofStep(CEmp, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case ReadRule =>
           // special case: Read is followed immediately by Call
           if (subderiv.subgoals.nonEmpty && subderiv.subgoals.head.ruleApps.head.rule.isInstanceOf[CallRule.type]) {
-            return traverse(subderiv.subgoals.reverse.head, env)
+            return traverse(subderiv.subgoals.head, env)
           }
           val nextEnv = CRead.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(CRead, env, subderiv.subgoals.reverse.zip(nextEnv).map {
+          CProofStep(CRead, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case WriteRuleOld =>
@@ -83,7 +83,7 @@ object Translator {
           val to = runExpr(store.to).asInstanceOf[CVar]
           val ruleApp = CWriteOld(to)
           val nextEnv = ruleApp.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(ruleApp, env, subderiv.subgoals.reverse.zip(nextEnv).map {
+          CProofStep(ruleApp, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case FreeRule =>
@@ -92,7 +92,7 @@ object Translator {
           val free = comp.asInstanceOf[Free]
           val cfree = CFreeRuleApp(free.size)
           val nextEnv = cfree.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(cfree, env, subderiv.subgoals.reverse.zip(nextEnv).map {
+          CProofStep(cfree, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case CallRule =>
@@ -100,22 +100,22 @@ object Translator {
           val PrependCall(comp, sub) = subderiv.alt.comp.asInstanceOf[PrependCall]
           val call = comp.asInstanceOf[Call]
           val csub = sub.map { case (k, v) => (CVar(k.name), runExpr(v))}
-          val ccall = CCallRuleApp(call.fun.name, call.args.map(arg => runExpr(arg).asInstanceOf[CVar]), csub)
+          val ccall = CCallRuleApp(env, call.fun.name, call.args.map(arg => runExpr(arg).asInstanceOf[CVar]), csub)
           val nextEnv = ccall.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(ccall, env, subderiv.subgoals.reverse.zip(nextEnv).map {
+          CProofStep(ccall, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case Open =>
           assert(subderiv.alt.comp.isInstanceOf[MakeOpen], s"Computation must be of type 'MakeOpen' for subderivation $subderiv")
           val MakeOpen(selectors, app) = subderiv.alt.comp.asInstanceOf[MakeOpen]
-          val open = COpen(selectors.map(runExpr), runHeaplet(app).asInstanceOf[CSApp])
+          val open = COpen(env, selectors.map(runExpr), runHeaplet(app).asInstanceOf[CSApp])
           val nextEnv = open.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(open, env, subderiv.subgoals.reverse.zip(nextEnv).map {
+          CProofStep(open, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
-        case rule =>
+        case _ =>
           assert(subderiv.subgoals.length <= 1, "Shouldn't be skipping a rule app with multiple subgoals")
-          traverse(subderiv.subgoals.reverse.head, env)
+          traverse(subderiv.subgoals.head, env)
       }
     }
 
@@ -125,13 +125,14 @@ object Translator {
     val cpreds = predicates.mapValues(runInductivePredicate)
     val spec = runFunSpecFromTrace(trace)
     val env = CEnvironment(initialGoal, spec, Map.empty, cpreds, Seq.empty, inductive)
-    val nextEnv = CGhostElim.updateEnv(env, initialGoal)
-    CProof(CProofStep(CGhostElim, env, Seq(traverse(root, nextEnv.head))))
+    val ge = CGhostElim(env)
+    val nextEnv = ge.updateEnv(env, initialGoal)
+    CProof(CProofStep(ge, Seq(traverse(root, nextEnv.head))))
   }
 
   def runStmtFromTrace(trace: Trace): CStatement = {
     def traverse(goalTrace: GoalTrace): CStatement = {
-      val subgoals = goalTrace.ruleApps.head.alts.head.subgoals.reverse
+      val subgoals = goalTrace.ruleApps.head.alts.head.subgoals
       goalTrace.ruleApps.head.alts.head.alt.comp match {
         case PureKont =>
           traverse(subgoals.head)
@@ -151,14 +152,13 @@ object Translator {
           CMagic
         case MakeGuarded(cond) =>
           CGuarded(runExpr(cond), traverse(subgoals.head))
-        case MakeOpen(selectors, app) =>
+        case MakeOpen(selectors, _) =>
           val stmts = subgoals.map(traverse)
-          if (stmts.length == 1) stmts.head else {
-            val cond_branches = selectors.zip(stmts).reverse
-            val ctail = cond_branches.tail
-            val finalBranch = cond_branches.head._2
-            ctail.foldLeft(finalBranch) { case (eb, (c, tb)) => CIf(runExpr(c), tb, eb).simplify }
+          def mkNestedIf(branches: List[(CExpr, CStatement)]): CStatement = branches match {
+            case b :: Nil => b._2
+            case b1 :: rest => CIf(b1._1, b1._2, mkNestedIf(rest)).simplify
           }
+          mkNestedIf(selectors.map(runExpr).zip(stmts).toList)
         case MakeIf(cond) =>
           CIf(runExpr(cond), traverse(subgoals.head), traverse(subgoals.last))
         case MakeAbduceCall(n) =>

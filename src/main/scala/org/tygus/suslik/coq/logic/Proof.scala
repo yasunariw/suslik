@@ -33,10 +33,10 @@ case class CEnvironment(goal: CGoal,
       ++ goal.post.sigma.collect(_.isInstanceOf[CSApp])).toSeq
 }
 
-case class CProofStep(app: CRuleApp, env: CEnvironment, next: Seq[CProofStep]) {
-  def before: Option[String] = app.before(env)
-  def op: Option[String] = app.op(env)
-  def after: Seq[String] = app.after(env)
+case class CProofStep(app: CRuleApp, next: Seq[CProofStep]) {
+  val before: Option[String] = app.before
+  val op: Option[String] = app.op
+  val after: Seq[String] = app.after
 }
 case class CProof(root: CProofStep) extends PrettyPrinting {
   override def pp: String = {

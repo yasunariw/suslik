@@ -4,9 +4,9 @@ import org.tygus.suslik.coq.language._
 import org.tygus.suslik.coq.language.Expressions._
 
 sealed abstract class CRuleApp {
-  def before(env: CEnvironment): Option[String] = None
-  def op(env: CEnvironment): Option[String] = None
-  def after(env: CEnvironment): Seq[String] = Seq.empty
+  val before: Option[String] = None
+  val op: Option[String] = None
+  val after: Seq[String] = Seq.empty
   def updateEnv(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = Seq(env)
   protected def nestedDestruct(items: Seq[CVar]): String = items.toList match {
     case v1 :: v2 :: rest =>
@@ -19,19 +19,20 @@ sealed abstract class CRuleApp {
 }
 
 
-case object CGhostElim extends CRuleApp {
-  override def before(env: CEnvironment): Option[String] = Some("ssl_ghostelim_pre.")
-  override def op(env: CEnvironment): Option[String] = {
+case class CGhostElim(env: CEnvironment) extends CRuleApp {
+  override val before: Option[String] = Some("ssl_ghostelim_pre.")
+  override val op: Option[String] = {
     val goal = env.goal
     val ghosts = goal.universalGhosts
-    if (ghosts.isEmpty) return None
-    val builder = new StringBuilder()
-    builder.append("move=>")
-    builder.append(nestedDestruct(ghosts))
-    builder.append("//=.")
-    Some(builder.toString())
+    if (ghosts.isEmpty) None else {
+      val builder = new StringBuilder()
+      builder.append("move=>")
+      builder.append(nestedDestruct(ghosts))
+      builder.append("//=.")
+      Some(builder.toString())
+    }
   }
-  override def after(env: CEnvironment): Seq[String] = {
+  override val after: Seq[String] = {
     val pre = env.goal.pre
     val ptss = pre.sigma.ptss
     val apps = pre.sigma.apps
@@ -72,7 +73,7 @@ case object CHeapUnreachable extends CFailRuleApp
 
 sealed abstract class CLogicalRuleApp extends CRuleApp
 case object CEmp extends CLogicalRuleApp {
-  override def op(env: CEnvironment): Option[String] = Some("ssl_emp.")
+  override val op: Option[String] = Some("ssl_emp.")
 }
 case object CInconsistency extends CLogicalRuleApp
 case object CFrame extends CLogicalRuleApp
@@ -83,36 +84,35 @@ case object CSubstLeftVar extends CLogicalRuleApp
 
 sealed abstract class COperationalRuleApp extends CRuleApp
 case class CWriteOld(to: CVar) extends COperationalRuleApp {
-  override def op(env: CEnvironment): Option[String] = Some("ssl_write.")
-  override def after(env: CEnvironment): Seq[String] = Seq(s"ssl_write_post ${to.pp}.")
+  override val op: Option[String] = Some("ssl_write.")
+  override val after: Seq[String] = Seq(s"ssl_write_post ${to.pp}.")
 }
 case object CWrite extends COperationalRuleApp
 case object CRead extends COperationalRuleApp {
-  override def op(env: CEnvironment): Option[String] = Some("ssl_read.")
+  override val op: Option[String] = Some("ssl_read.")
 }
 case object CAlloc extends COperationalRuleApp
 case class CFreeRuleApp(size: Int) extends COperationalRuleApp {
-  override def op(env: CEnvironment): Option[String] = Some((1 to size).map(_ => "ssl_dealloc.").mkString("\n"))
+  override val op: Option[String] = Some((1 to size).map(_ => "ssl_dealloc.").mkString("\n"))
 }
 
 sealed abstract class CUnfoldingRuleApp extends CRuleApp
-case class COpen(selectors: Seq[CExpr], app: CSApp) extends CUnfoldingRuleApp {
-  def pred(env: CEnvironment): CInductivePredicate = env.predicates(app.pred)
+case class COpen(env: CEnvironment, selectors: Seq[CExpr], app: CSApp) extends CUnfoldingRuleApp {
+  val pred: CInductivePredicate = env.predicates(app.pred)
 
-  override def op(env: CEnvironment): Option[String] = {
+  override val op: Option[String] = {
     val builder = new StringBuilder()
     builder.append("case: ifP=>cond; ")
-    builder.append(s"case H_${pred(env).name}; ")
+    builder.append(s"case H_${pred.name}; ")
     builder.append("rewrite cond//==>_.")
     Some(builder.toString())
   }
-  override def after(env: CEnvironment): Seq[String] = {
-    val predicate = pred(env)
+  override val after: Seq[String] = {
     selectors.map(selector => {
       val builder = new StringBuilder()
-      val clause = predicate.clauses.find(c => c.selector == selector).get
+      val clause = pred.clauses.find(c => c.selector == selector).get
       val asn = clause.asn
-      val ve = (asn.spatialEx ++ asn.pureEx).diff(predicate.params.map(_._2)).distinct
+      val ve = (asn.spatialEx ++ asn.pureEx).diff(pred.params.map(_._2)).distinct
       val he = asn.heapEx
 
       // existentials of the constructor
@@ -140,11 +140,10 @@ case class COpen(selectors: Seq[CExpr], app: CSApp) extends CUnfoldingRuleApp {
   override def updateEnv(env: CEnvironment, goal: CGoal): Seq[CEnvironment] = {
     val goal = env.goal
     val gamma = goal.gamma
-    val predicate = pred(env)
     selectors.map(selector => {
-      val clause = predicate.clauses.find(c => c.selector == selector).get
+      val clause = pred.clauses.find(c => c.selector == selector).get
       val asn = clause.asn
-      val ve = (asn.spatialEx ++ asn.pureEx).diff(predicate.params.map(_._2)).distinct
+      val ve = (asn.spatialEx ++ asn.pureEx).diff(pred.params.map(_._2)).distinct
       val he = asn.heapEx
 
       val ctx = env.ctx ++ ve.map(v => (v, gamma.getOrElse(v, CUnitType))).toMap[CVar, ProofContextItem]
@@ -154,8 +153,8 @@ case class COpen(selectors: Seq[CExpr], app: CSApp) extends CUnfoldingRuleApp {
     })
   }
 }
-case class CCallRuleApp(fun: String, args: Seq[CVar], sub: Map[CVar, CExpr]) extends CUnfoldingRuleApp {
-  override def before(env: CEnvironment): Option[String] = {
+case class CCallRuleApp(env: CEnvironment, fun: String, args: Seq[CVar], sub: Map[CVar, CExpr]) extends CUnfoldingRuleApp {
+  override val before: Option[String] = {
     val builder = new StringBuilder()
     // rearrange heap to put recursive heap component to the head
     builder.append(s"put_to_head ${env.callHeapVars.head.pp}.\n")
@@ -166,7 +165,7 @@ case class CCallRuleApp(fun: String, args: Seq[CVar], sub: Map[CVar, CExpr]) ext
     Some(builder.toString())
   }
 
-  override def op(env: CEnvironment): Option[String] =
+  override val op: Option[String] =
     Some(s"apply: val_do=>//= _ ? ->; rewrite unitL=>_.")
 
   override def updateEnv(env: CEnvironment, goal: CGoal): Seq[CEnvironment] =

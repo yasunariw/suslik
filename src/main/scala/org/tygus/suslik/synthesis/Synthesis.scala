@@ -38,8 +38,7 @@ trait Synthesis extends SepLogicUtils {
     printLog(List(("Initial specification:", Console.BLACK), (s"${goal.pp}\n", Console.BLUE)))(i = 0, config)
     val stats = new SynStats()
     SMTSolving.init()
-    val trace = new Trace(spec)
-    trace.init(goal)
+    val trace = Trace.init(spec, goal)
     try {
       synthesize(goal, config.startingDepth, trace.root.get)(stats = stats, rules = nextRules(goal, config.startingDepth)) match {
         case Some(body) =>
@@ -93,31 +92,35 @@ trait Synthesis extends SepLogicUtils {
       return None
     }
 
-    def tryRules(rules: List[SynthesisRule], trace: GoalTrace): Option[Statement] = rules match {
-      case Nil => None
+    def tryRules(rules: List[SynthesisRule], trace: GoalTrace,
+                 appTraceKont: List[RuleAppTrace] => List[RuleAppTrace]): Option[Statement] = rules match {
+      case Nil =>
+        trace.ruleApps = appTraceKont(Nil)
+        None
       case r :: rs =>
-
         // Try alternative sub-derivations after applying `r`
-        def tryAlternatives(alts: Seq[Subderivation], altIndex: Int, ruleAppTrace: RuleAppTrace): Option[Statement] = alts match {
+        @scala.annotation.tailrec
+        def tryAlternatives(alts: Seq[Subderivation], altIndex: Int, ruleAppTrace: RuleAppTrace, altTraceKont: List[SubderivationTrace] => List[SubderivationTrace]): Option[Statement] = alts match {
           case Seq(a, as@_*) =>
             if (altIndex > 0) printLog(List((s"${r.toString} Trying alternative sub-derivation ${altIndex + 1}:", MAGENTA)))
             val altTrace = SubderivationTrace(a)
-            ruleAppTrace.alts ::= altTrace
             solveSubgoals(a, altTrace) match {
               case Some(Magic) =>
                 stats.bumpUpBacktracing()
-                tryAlternatives(as, altIndex + 1, ruleAppTrace) // This alternative is inconsistent: try other alternatives
+                tryAlternatives(as, altIndex + 1, ruleAppTrace, altTrace :: altTraceKont(_)) // This alternative is inconsistent: try other alternatives
               case Some(res) =>
                 stats.bumpUpLastingSuccess()
                 altTrace.stmt = Some(res)
+                ruleAppTrace.alts = altTraceKont(altTrace :: Nil)
                 Some(res) // This alternative succeeded
               case None =>
                 stats.bumpUpBacktracing()
-                tryAlternatives(as, altIndex + 1, ruleAppTrace) // This alternative failed: try other alternatives
+                tryAlternatives(as, altIndex + 1, ruleAppTrace, altTrace :: altTraceKont(_)) // This alternative failed: try other alternatives
             }
           case Seq() =>
             // All alternatives have failed
             ruleAppTrace.isFail = true
+            ruleAppTrace.alts = altTraceKont(Nil)
             if (config.invert && r.isInstanceOf[InvertibleRule]) {
               // Do not backtrack application of this rule: the rule is invertible and cannot be the reason for failure
               printLog(List((s"${r.toString} All sub-derivations failed: invertible rule, do not backtrack.", MAGENTA)))
@@ -126,7 +129,7 @@ trait Synthesis extends SepLogicUtils {
               // Backtrack application of this rule
               stats.bumpUpBacktracing()
               printLog(List((s"${r.toString} All sub-derivations failed: backtrack.", MAGENTA)))
-              tryRules(rs, trace)
+              tryRules(rs, trace, ruleAppTrace :: appTraceKont(_))
             }
         }
 
@@ -136,6 +139,7 @@ trait Synthesis extends SepLogicUtils {
           // Optimization: if one of the subgoals failed, to not try the rest!
           // <ugly-imperative-code>
           val results = new ListBuffer[Statement]
+          val subgoalTraces = new ListBuffer[GoalTrace]
           import util.control.Breaks._
           breakable {
             for {subgoal <- s.subgoals} {
@@ -143,11 +147,12 @@ trait Synthesis extends SepLogicUtils {
               synthesize(subgoal, depth - 1, goalTrace)(stats, nextRules(subgoal, depth - 1))(ind + 1) match {
                 case Some(s) =>
                   goalTrace.stmt = Some(s)
-                  trace.subgoals ::= goalTrace
                   results.append(s)
+                  subgoalTraces.append(goalTrace)
                 case _ => break
               }
             }
+            trace.subgoals = subgoalTraces.toList
           }
           // </ugly-imperative-code>
 
@@ -188,7 +193,6 @@ trait Synthesis extends SepLogicUtils {
 
         // Invoke the rule
         val ruleAppTrace = RuleAppTrace(r)
-        trace.ruleApps ::= ruleAppTrace
         val allSubderivations = r(goal)
         val goalStr = s"$r: "
 
@@ -213,7 +217,7 @@ trait Synthesis extends SepLogicUtils {
           // Rule not applicable: try the rest
           printLog(List((s"$goalStr${RED}FAIL", BLACK)), isFail = true)
           ruleAppTrace.isFail = true
-          tryRules(rs, trace)
+          tryRules(rs, trace, ruleAppTrace :: appTraceKont(_))
         } else {
           // Rule applicable: try all possible sub-derivations
           val subSizes = subderivations.map(s => s"${s.subgoals.size} sub-goal(s)").mkString(", ")
@@ -223,11 +227,12 @@ trait Synthesis extends SepLogicUtils {
           if (subderivations.size > 1) {
             printLog(List((s"Trying alternative sub-derivation 1:", CYAN)))
           }
-          tryAlternatives(subderivations, 0, ruleAppTrace)
+          trace.ruleApps = appTraceKont(ruleAppTrace :: Nil)
+          tryAlternatives(subderivations, 0, ruleAppTrace, identity)
         }
     }
 
-    tryRules(rules, trace)
+    tryRules(rules, trace, identity)
   }
 
   private def getIndent(implicit i: Int): String = if (i <= 0) "" else "|  " * i
