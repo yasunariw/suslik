@@ -90,9 +90,9 @@ object Translator {
           assert(subderiv.alt.comp.isInstanceOf[Prepend], s"Computation must be of type 'Prepend' for subderivation $subderiv")
           val Prepend(comp) = subderiv.alt.comp.asInstanceOf[Prepend]
           val free = comp.asInstanceOf[Free]
-          val cfree = CFreeRuleApp(free.size)
-          val nextEnv = cfree.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(cfree, subderiv.subgoals.zip(nextEnv).map {
+          val ruleApp = CFreeRuleApp(free.size)
+          val nextEnv = ruleApp.updateEnv(env, runGoal(goalTrace.goal))
+          CProofStep(ruleApp, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case CallRule =>
@@ -100,17 +100,17 @@ object Translator {
           val PrependCall(comp, sub) = subderiv.alt.comp.asInstanceOf[PrependCall]
           val call = comp.asInstanceOf[Call]
           val csub = sub.map { case (k, v) => (CVar(k.name), runExpr(v))}
-          val ccall = CCallRuleApp(env, call.fun.name, call.args.map(arg => runExpr(arg).asInstanceOf[CVar]), csub)
-          val nextEnv = ccall.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(ccall, subderiv.subgoals.zip(nextEnv).map {
+          val ruleApp = CCallRuleApp(env, call.fun.name, call.args.map(arg => runExpr(arg).asInstanceOf[CVar]), csub)
+          val nextEnv = ruleApp.updateEnv(env, runGoal(goalTrace.goal))
+          CProofStep(ruleApp, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case Open =>
           assert(subderiv.alt.comp.isInstanceOf[MakeOpen], s"Computation must be of type 'MakeOpen' for subderivation $subderiv")
           val MakeOpen(selectors, app) = subderiv.alt.comp.asInstanceOf[MakeOpen]
-          val open = COpen(env, selectors.map(runExpr), runHeaplet(app).asInstanceOf[CSApp])
-          val nextEnv = open.updateEnv(env, runGoal(goalTrace.goal))
-          CProofStep(open, subderiv.subgoals.zip(nextEnv).map {
+          val ruleApp = COpen(env, selectors.map(runExpr), runHeaplet(app).asInstanceOf[CSApp])
+          val nextEnv = ruleApp.updateEnv(env, runGoal(goalTrace.goal))
+          CProofStep(ruleApp, subderiv.subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case _ =>
@@ -156,7 +156,7 @@ object Translator {
           val stmts = subgoals.map(traverse)
           def mkNestedIf(branches: List[(CExpr, CStatement)]): CStatement = branches match {
             case b :: Nil => b._2
-            case b1 :: rest => CIf(b1._1, b1._2, mkNestedIf(rest)).simplify
+            case b :: rest => CIf(b._1, b._2, mkNestedIf(rest)).simplify
           }
           mkNestedIf(selectors.map(runExpr).zip(stmts).toList)
         case MakeIf(cond) =>
