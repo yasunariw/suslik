@@ -170,7 +170,7 @@ trait Synthesis extends SepLogicUtils {
         def handleGuard(s: Subderivation, stmts: List[Statement], trace: SubderivationTrace): Option[Statement] =
           stmts match {
             case Guarded(cond, thn) :: Nil =>
-              s.kont(stmts) match {
+              s.comp.apply(stmts) match {
                 case g@Guarded(_, _) if depth < config.startingDepth => // Can propagate to upper-level goal
                   Some(g)
                 case _ => // Cannot propagate: try to synthesize else branch
@@ -184,11 +184,11 @@ trait Synthesis extends SepLogicUtils {
                   synthesize(newG, depth, newGTrace)(stats, nextRules(newG, depth - 1))(ind) match {
                     case Some(els) =>
                       newGTrace.stmt = Some(els)
-                      Some(s.kont(List(If(cond, thn, els)))) // successfully synthesized else
+                      Some(s.comp.apply(List(If(cond, thn, els)))) // successfully synthesized else
                     case _ => None // failed to synthesize else
                   }
               }
-            case _ => Some(s.kont(stmts))
+            case _ => Some(s.comp.apply(stmts))
           }
 
         // Invoke the rule
