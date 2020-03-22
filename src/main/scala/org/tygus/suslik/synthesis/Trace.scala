@@ -6,7 +6,7 @@ import org.tygus.suslik.logic.Specifications.Goal
 import org.tygus.suslik.synthesis.rules.UnfoldingRules.InductionRule
 
 object Trace {
-  def init(spec: FunSpec, goal: Goal): Trace = {
+  def apply(spec: FunSpec, goal: Goal): Trace = {
     val trace = new Trace(spec)
     trace.root = Some(GoalTrace(goal))
     trace
