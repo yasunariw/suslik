@@ -27,7 +27,7 @@ object Translator {
     val root = trace.root.get
     val goal = root.goal
     val pureParams = goal.universalGhosts.map(v => runParam((goal.gamma(v), v))).toList
-    CFunSpec(goal.fname, runSSLType(tp), goal.formals.map(runParam), pureParams, runAsn(goal.pre), runAsn(goal.post))
+    CFunSpec(goal.fname, runSSLType(tp), goal.formals.map(runParam), pureParams, runAsn(goal.pre), runAsn(goal.post), trace.inductive)
   }
 
   def runInductivePredicate(el: InductivePredicate): CInductivePredicate = {
@@ -174,13 +174,9 @@ object Translator {
     case Magic => ???
     case Malloc(to, tpe, sz) =>
       CMalloc(CVar(to.name), runSSLType(tpe), sz)
-    case Free(v) =>
-      val heaplets = FreeRule.findTargetHeaplets(goal)
-      if (heaplets.isDefined) {
-        return (1 until heaplets.get._1.sz)
+    case el@Free(v) =>
+      (1 until el.size)
           .foldLeft(CFree(CVar(v.name)).asInstanceOf[CStatement])((acc, n) => CSeqComp(CFree(CVar(v.name), n), acc))
-      }
-      CFree(CVar(v.name))
     case Load(to, tpe, from, offset) =>
       CLoad(CVar(to.name), runSSLType(tpe), CVar(from.name), offset)
     case Store(to, offset, expr) =>
