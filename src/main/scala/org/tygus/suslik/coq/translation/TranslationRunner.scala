@@ -69,7 +69,7 @@ object TranslationRunner extends SynthesisRunnerUtil {
     }
 
     val cPredicates = env.predicates.mapValues(pred => Translator.runInductivePredicate(pred.resolveOverloading(env)))
-    val cLseg = cPredicates("lseg")
+    val cLseg = cPredicates("tree")
     testPrintln(cLseg.pp)
 
     val spec = specs.head

@@ -80,8 +80,8 @@ object Translator {
         case FreeRule =>
           assert(subderiv.alt.comp.isInstanceOf[Prepend], s"Computation must be of type 'Prepend' for subderivation $subderiv")
           val Prepend(comp) = subderiv.alt.comp.asInstanceOf[Prepend]
-          val free = comp.asInstanceOf[Free]
-          Some(CFreeRuleApp(free.size))
+          val Block(_, size) = FreeRule.findTargetHeaplets(goalTrace.goal).get._1
+          Some(CFreeRuleApp(size))
         case CallRule =>
           assert(subderiv.alt.comp.isInstanceOf[PrependCall], s"Computation must be of type 'PrependCall' for subderivation $subderiv")
           val PrependCall(comp, sub) = subderiv.alt.comp.asInstanceOf[PrependCall]
@@ -174,8 +174,9 @@ object Translator {
     case Magic => ???
     case Malloc(to, tpe, sz) =>
       CMalloc(CVar(to.name), runSSLType(tpe), sz)
-    case el@Free(v) =>
-      (1 until el.size)
+    case Free(v) =>
+      val Block(_, size) = FreeRule.findTargetHeaplets(goal).get._1
+      (1 until size)
           .foldLeft(CFree(CVar(v.name)).asInstanceOf[CStatement])((acc, n) => CSeqComp(CFree(CVar(v.name), n), acc))
     case Load(to, tpe, from, offset) =>
       CLoad(CVar(to.name), runSSLType(tpe), CVar(from.name), offset)

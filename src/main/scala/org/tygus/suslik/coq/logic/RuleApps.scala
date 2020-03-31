@@ -129,11 +129,23 @@ case class COpen(env: CEnvironment, selectors: Seq[CExpr], app: CSApp) extends C
       builder.append("move=>[->].\n")
       if (asn.sigma.apps.nonEmpty) {
         builder.append(s"move=>")
-        builder.append(nestedDestruct(asn.sigma.apps.map(app => CVar(s"H_rec_${app.pred}"))))
+        builder.append(nestedDestruct(hyps(asn)))
         builder.append(".\n")
       }
 
       builder.toString()
+    })
+  }
+
+  private def hyps(asn: CAssertion) : Seq[CVar] = {
+    val m: scala.collection.mutable.Map[String, Int] = scala.collection.mutable.Map.empty
+    asn.sigma.apps.map(app => m.get(app.pred) match {
+      case None =>
+        m += (app.pred -> 1)
+        CVar(s"H_rec_${app.pred}")
+      case Some(count) =>
+        m += (app.pred -> (count + 1))
+        CVar(s"H_rec_${app.pred}${"'" * count}")
     })
   }
 

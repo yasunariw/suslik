@@ -27,7 +27,10 @@ sealed abstract class Sentence extends PrettyPrinting {
         }
         // body
         builder.append(mkSpaces(offset + 2))
-        builder.append(s"${phi.pp} /\\ ${sigma.pp}")
+        phi match {
+          case CBoolConst(true) => builder.append(sigma.pp)
+          case _ => builder.append(s"${phi.pp} /\\ ${sigma.pp}")
+        }
       case CInductiveClause(name, selector, asn) =>
         builder.append(mkSpaces(offset))
         builder.append(s"| $name of ${selector.pp} of\n")
@@ -40,9 +43,17 @@ sealed abstract class Sentence extends PrettyPrinting {
           builder.append("\n")
         }
         builder.append(".")
-      case el@CFunSpec(name, rType, params, pureParams, pre, post) =>
+      case el@CFunSpec(name, rType, params, pureParams, pre, post, inductive) =>
+        val paramsStr = params.map { case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")
         builder.append(mkSpaces(offset))
-        builder.append(s"Definition ${name}_type ${params.map { case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")} :=\n")
+        builder.append(s"Definition ${name}_type ")
+        if (!inductive) {
+          builder.append(s"$paramsStr ")
+        }
+        builder.append(":=\n")
+        if (inductive) {
+          builder.append(s"  forall $paramsStr,\n")
+        }
 
         // print pure params
         if (pureParams.nonEmpty) {
@@ -64,7 +75,6 @@ sealed abstract class Sentence extends PrettyPrinting {
         builder.append(mkSpaces(offset + 6))
         builder.append(s"[vfun (_: ${rType.pp}) h =>\n")
         build(post, offset + 8, el.programVars)
-        builder.append(",\n")
 
         builder.append(mkSpaces(offset + 6))
         builder.append("]).")
@@ -90,6 +100,6 @@ case class CInductiveClause(name: String, selector: CExpr, asn: CAssertion) exte
 
 case class CInductivePredicate(name: String, params: CFormals, clauses: Seq[CInductiveClause]) extends Sentence
 
-case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: CFormals, pre: CAssertion, post: CAssertion) extends Sentence {
+case class CFunSpec(name: String, rType: CoqType, params: CFormals, pureParams: CFormals, pre: CAssertion, post: CAssertion, inductive: Boolean) extends Sentence {
   def programVars: Seq[CVar] = params.map(_._2) ++ pureParams.map(_._2)
 }

@@ -135,18 +135,30 @@ object Expressions {
 
   case class CSFormula(heapName: String, apps: Seq[CSApp], ptss: Seq[CPointsTo]) extends CExpr {
     override def pp: String = {
-      val ptssStr = s"$heapName = ${if (ptss.isEmpty) "empty" else (ptss ++ heapVars).map(_.pp).mkString(" \\+ ")}"
-      val appsStr =
-        if (apps.isEmpty) ""
-        else if (ptss.isEmpty) " /\\ " + apps.map { app => s"${app.pp} $heapName" }.mkString(" /\\ ")
-        else " /\\ " + apps.zipWithIndex.map { case (app, i) => s"${app.pp} $heapName${"'" * (i + 1)}" }.mkString(" /\\ ")
-
-      ptssStr + appsStr
+      val hs = heapVars.map(_.pp)
+      if (ptss.isEmpty) apps match {
+        case Seq(_, _, _*) =>
+          s"$heapName = ${hs.mkString(" ")} /\\ ${
+            apps.zip(hs).map { case (a, h) => s"${a.pp} $h" } mkString " /\\ "
+          }"
+        case Seq(hd, _*) =>
+          s"${hd.pp} $heapName"
+        case Seq() =>
+          s"$heapName = empty"
+      } else apps match {
+        case Seq(_, _*) =>
+          s"$heapName = ${ptss.map(_.pp).mkString(" \\+ ")} \\+ ${hs.mkString(" \\+ ")} /\\ ${
+            apps.zip(hs).map { case (a, h) => s"${a.pp} $h" } mkString " /\\ "
+          }"
+        case Seq() =>
+          s"$heapName = ${ptss.map(_.pp).mkString(" \\+ ")}"
+      }
     }
 
     def heapVars: Seq[CVar] =
       if (ptss.isEmpty) Seq.empty
       else (1 to apps.length).map(i => CVar(s"$heapName${"'" * i}"))
+
     override def vars: Seq[CVar] = super.vars ++ heapVars
   }
 
@@ -236,7 +248,7 @@ object Expressions {
       case that: COpOverloadedEq.type => true
       case _ => false
     }
-    override def pp: String = "="
+    override def pp: String = "=="
     override def ppp: String = "=="
   }
 
