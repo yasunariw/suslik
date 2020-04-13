@@ -9,6 +9,8 @@ import org.tygus.suslik.synthesis.SynthesisRunner._
 import org.tygus.suslik.synthesis.instances.PhasedSynthesis
 import org.tygus.suslik.util.{SynLogLevels, SynLogging, SynStatUtil}
 
+import scala.io.Source
+
 object TranslationRunner extends SynthesisRunnerUtil {
 
   override implicit val log : SynLogging = SynLogLevels.Test
@@ -28,7 +30,7 @@ object TranslationRunner extends SynthesisRunnerUtil {
 
   private def handleInput(args: Array[String]): Unit = {
     val file = args(0)
-    val synConfig = SynConfig()
+    val synConfig = SynConfig(printDerivations = true)
     val config = RunConfig(synConfig, file)
     val dir = getParentDir(file)
     val fName = new File(file).getName
@@ -68,10 +70,6 @@ object TranslationRunner extends SynthesisRunnerUtil {
       throw SynthesisException("Expected a single synthesis goal")
     }
 
-    val cPredicates = env.predicates.mapValues(pred => Translator.runInductivePredicate(pred.resolveOverloading(env)))
-    val cLseg = cPredicates("tree")
-    testPrintln(cLseg.pp)
-
     val spec = specs.head
     val time1 = System.currentTimeMillis()
     val sresult = synthesizeProc(spec, env.copy(config = params), body)
@@ -81,7 +79,23 @@ object TranslationRunner extends SynthesisRunnerUtil {
     SynStatUtil.log(testName, delta, params, spec, sresult)
 
     sresult match {
-      case Some((rr, stats)) =>
+      case Some((rr, stats, trace)) =>
+        // Coq code generation
+        testPrintln(trace.pp)
+        testPrintln("\n")
+        testPrintln("Synthesized Certificate:\n", Console.MAGENTA)
+        val headersFile = "htt-tactics.v"
+        val headers = Source.fromFile(headersFile)
+        for (line <- headers.getLines) testPrintln(line)
+        headers.close()
+        for (label <- (trace.spec.pre.sigma.apps ++ trace.spec.post.sigma.apps).distinct.map(_.pred)) {
+          val predicate = env.predicates(label)
+          testPrintln(Translator.runInductivePredicate(predicate.resolveOverloading(env)).pp)
+        }
+        testPrintln(Translator.runFunSpecFromTrace(trace).pp)
+        testPrintln(Translator.runProcedure(rr, trace).ppp)
+        testPrintln(Translator.runProofFromTrace(trace, env.predicates).pp)
+
         val result = rr.pp
         if (params.printStats) {
           testPrintln(s"\n[$testName]:", Console.MAGENTA)
@@ -100,13 +114,6 @@ object TranslationRunner extends SynthesisRunnerUtil {
           testPrintln("-----------------------------------------------------")
         } else {
           println(result)
-        }
-        if (out != noOutputCheck) {
-          val tt = out.trim.lines.toList
-          val res = result.trim.lines.toList
-          if (params.assertSuccess && res != tt) {
-            throw SynthesisException(s"\nThe expected output\n$tt\ndoesn't match the result:\n$res")
-          }
         }
       case None =>
         throw SynthesisException(s"Failed to synthesise:\n$sresult")

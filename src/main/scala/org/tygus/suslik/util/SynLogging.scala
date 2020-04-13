@@ -4,7 +4,7 @@ import org.tygus.suslik.language.Statements.Procedure
 import org.tygus.suslik.logic.FunSpec
 import org.tygus.suslik.logic.Specifications._
 import org.tygus.suslik.logic.smt.SMTSolving
-import org.tygus.suslik.synthesis.{SynConfig, SynthesisRule}
+import org.tygus.suslik.synthesis.{SynConfig, SynthesisRule, Trace}
 import scalaz.DList
 
 /**
@@ -132,10 +132,10 @@ object SynStatUtil {
   def using[A <: {def close() : Unit}, B](resource: A)(f: A => B): B =
       try f(resource) finally resource.close()
 
-  def log(name: String, time: Long, config: SynConfig, spec: FunSpec, stats: Option[(Procedure, SynStats)]): Unit = {
+  def log(name: String, time: Long, config: SynConfig, spec: FunSpec, stats: Option[(Procedure, SynStats, Trace)]): Unit = {
     if (config.logToFile) {
       val statRow = (stats match {
-        case Some((proc, st)) => List(proc.body.size, st.numBack, st.numLasting, st.numSucc, st.smtCacheSize)
+        case Some((proc, st, _)) => List(proc.body.size, st.numBack, st.numLasting, st.numSucc, st.smtCacheSize)
         case None => DList.replicate(4, "FAIL").toList
       }).mkString(", ")
 

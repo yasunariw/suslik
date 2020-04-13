@@ -1,6 +1,6 @@
 package org.tygus.suslik.language
 
-import org.tygus.suslik.logic.{FunSpec, Gamma}
+import org.tygus.suslik.logic.{Block, FunSpec, Gamma}
 import org.tygus.suslik.logic.Specifications.Goal
 import org.tygus.suslik.synthesis.Subderivation
 import org.tygus.suslik.util.StringUtil._

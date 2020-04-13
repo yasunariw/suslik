@@ -26,6 +26,13 @@ case class PrependCall(s: Statement, sub: Map[Var, Expr]) extends StmtComputatio
   }
 }
 
+case class PrependFree(s: Statement, sz: Int) extends StmtComputation {
+  override def apply(stmts: Seq[Statement]): Statement = {
+    val rest = stmts.head
+    SeqComp(s, rest).simplify
+  }
+}
+
 case class PrependFromSketch(s: Statement) extends StmtComputation {
   override def apply(stmts: Seq[Statement]): Statement = {
     val rest = stmts.head

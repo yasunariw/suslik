@@ -47,13 +47,8 @@ sealed abstract class Sentence extends PrettyPrinting {
         val paramsStr = params.map { case (t, v) => s"(${v.pp} : ${t.pp})" }.mkString(" ")
         builder.append(mkSpaces(offset))
         builder.append(s"Definition ${name}_type ")
-        if (!inductive) {
-          builder.append(s"$paramsStr ")
-        }
         builder.append(":=\n")
-        if (inductive) {
-          builder.append(s"  forall $paramsStr,\n")
-        }
+        builder.append(s"  forall $paramsStr,\n")
 
         // print pure params
         if (pureParams.nonEmpty) {

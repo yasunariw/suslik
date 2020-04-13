@@ -240,7 +240,7 @@ object OperationalRules extends SepLogicUtils with RuleUtils {
 
       findTargetHeaplets(goal) match {
         case None => Nil
-        case Some((h@Block(x@Var(_), _), pts)) =>
+        case Some((h@Block(x@Var(_), sz), pts)) =>
           val newPre = Assertion(pre.phi, pre.sigma - h - pts)
 
           // Collecting the footprint
@@ -250,7 +250,7 @@ object OperationalRules extends SepLogicUtils with RuleUtils {
           val subGoal = goal.copy(newPre, newRuleApp = Some(ruleApp))
           val kont: StmtProducer = prepend(Free(x), toString)
 
-          List(Subderivation(List(subGoal), kont, Prepend(Free(x))))
+          List(Subderivation(List(subGoal), kont, PrependFree(Free(x), sz)))
         case Some(_) => Nil
       }
     }

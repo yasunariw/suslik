@@ -16,7 +16,11 @@ object Trace {
 class Trace(val spec: FunSpec) {
   var root: Option[GoalTrace] = None
 
-  def inductive: Boolean = this.root.exists(_.ruleApps.head.rule.isInstanceOf[InductionRule.type])
+  def inductive: Boolean = this.root.exists(goal =>
+    goal.ruleApps.head.rule match {
+      case InductionRule => true
+      case _ => false
+    })
 
   def pp: String = {
     def mkSpaces(indent: Integer) : String = " " * indent * 2

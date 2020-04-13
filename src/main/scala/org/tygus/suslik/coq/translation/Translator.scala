@@ -57,40 +57,31 @@ object Translator {
     val inductive = trace.inductive
 
     def traverse(goalTrace: GoalTrace, env: CEnvironment): CProofStep = {
-      val ruleAppTrace = goalTrace.ruleApps.find(!_.isFail)
-      assert(ruleAppTrace.isDefined, s"No successful rule application found for goal ${goalTrace.goal.pp}")
-      assert(ruleAppTrace.get.alts.nonEmpty, s"No derivation found for rule app ${ruleAppTrace.get.rule}")
-      val subderiv = ruleAppTrace.get.alts.head
-      val ruleApp = ruleAppTrace.get.rule match {
-        case EmpRule =>
+      val ruleAppTraceOpt = goalTrace.ruleApps.find(!_.isFail)
+      assert(ruleAppTraceOpt.isDefined, s"No successful rule application found for goal ${goalTrace.goal.pp}")
+      val ruleAppTrace = ruleAppTraceOpt.get
+      assert(ruleAppTrace.alts.nonEmpty, s"No derivation found for rule app ${ruleAppTrace.rule}")
+      val altTrace = ruleAppTrace.alts.head
+      val subgoals = altTrace.subgoals
+      val subderiv = altTrace.alt
+      val ruleApp = (ruleAppTrace.rule, subderiv.comp) match {
+        case (EmpRule, _) =>
           Some(CEmp)
-        case ReadRule =>
+        case (ReadRule, _) =>
           // special case: Read is followed immediately by Call
-          if (subderiv.subgoals.nonEmpty && subderiv.subgoals.head.ruleApps.head.rule.isInstanceOf[CallRule.type]) {
+          if (subgoals.nonEmpty && subgoals.head.ruleApps.head.rule.isInstanceOf[CallRule.type]) {
             None
           } else {
             Some(CRead)
           }
-        case WriteRuleOld =>
-          assert(subderiv.alt.comp.isInstanceOf[Prepend], s"Computation must be of type 'Prepend' for subderivation $subderiv")
-          val Prepend(comp) = subderiv.alt.comp.asInstanceOf[Prepend]
-          val store = comp.asInstanceOf[Store]
-          val to = runExpr(store.to).asInstanceOf[CVar]
-          Some(CWriteOld(to))
-        case FreeRule =>
-          assert(subderiv.alt.comp.isInstanceOf[Prepend], s"Computation must be of type 'Prepend' for subderivation $subderiv")
-          val Prepend(comp) = subderiv.alt.comp.asInstanceOf[Prepend]
-          val Block(_, size) = FreeRule.findTargetHeaplets(goalTrace.goal).get._1
-          Some(CFreeRuleApp(size))
-        case CallRule =>
-          assert(subderiv.alt.comp.isInstanceOf[PrependCall], s"Computation must be of type 'PrependCall' for subderivation $subderiv")
-          val PrependCall(comp, sub) = subderiv.alt.comp.asInstanceOf[PrependCall]
-          val call = comp.asInstanceOf[Call]
+        case (WriteRuleOld, Prepend(Store(to, _, _))) =>
+          Some(CWriteOld(CVar(to.name)))
+        case (FreeRule, PrependFree(_, sz)) =>
+          Some(CFreeRuleApp(sz))
+        case (CallRule, PrependCall(Call(to, fun, args), sub)) =>
           val csub = sub.map { case (k, v) => (CVar(k.name), runExpr(v))}
-          Some(CCallRuleApp(env, call.fun.name, call.args.map(arg => runExpr(arg).asInstanceOf[CVar]), csub))
-        case Open =>
-          assert(subderiv.alt.comp.isInstanceOf[MakeOpen], s"Computation must be of type 'MakeOpen' for subderivation $subderiv")
-          val MakeOpen(selectors, app) = subderiv.alt.comp.asInstanceOf[MakeOpen]
+          Some(CCallRuleApp(env, fun.name, args.map(arg => runExpr(arg).asInstanceOf[CVar]), csub))
+        case (Open, MakeOpen(selectors, app)) =>
           Some(COpen(env, selectors.map(runExpr), runHeaplet(app).asInstanceOf[CSApp]))
         case _ =>
           assert(subderiv.subgoals.length <= 1, "Shouldn't be skipping a rule app with multiple subgoals")
@@ -100,11 +91,11 @@ object Translator {
       ruleApp match {
         case Some(app) =>
           val nextEnv = app.nextEnvs(env, runGoal(goalTrace.goal))
-          CProofStep(app, subderiv.subgoals.zip(nextEnv).map {
+          CProofStep(app, subgoals.zip(nextEnv).map {
             case (t, env1) => traverse(t, env1)
           })
         case None =>
-          traverse(subderiv.subgoals.head, env)
+          traverse(subgoals.head, env)
       }
     }
 
@@ -127,13 +118,27 @@ object Translator {
         case PureKont =>
           traverse(subgoals.head)
         case Prepend(s) =>
-          CSeqComp(runStmt(s, goalTrace.goal), traverse(subgoals.head)).simplify
+          val stmt = s match {
+            case Skip => CSkip
+            case Malloc(to, tpe, sz) =>
+              CMalloc(CVar(to.name), runSSLType(tpe), sz)
+            case Load(to, tpe, from, offset) =>
+              CLoad(CVar(to.name), runSSLType(tpe), CVar(from.name), offset)
+            case Store(to, offset, expr) =>
+              CStore(CVar(to.name), offset, runExpr(expr))
+          }
+          CSeqComp(stmt, traverse(subgoals.head)).simplify
         case PrependCall(s, _) =>
-          CSeqComp(runStmt(s, goalTrace.goal), traverse(subgoals.head)).simplify
-        case PrependFromSketch(s) =>
-          CSeqComp(runStmt(s, goalTrace.goal), traverse(subgoals.head))
-        case Append(s) =>
-          CSeqComp(traverse(subgoals.head), runStmt(s, goalTrace.goal)).simplify
+          val Call(to, fun, args) = s.asInstanceOf[Call]
+          val stmt = CCall(to.map { case (v, t) => (CVar(v.name), runSSLType(t)) }, CVar(fun.name), args.map(runExpr))
+          CSeqComp(stmt, traverse(subgoals.head)).simplify
+        case PrependFree(s, sz) =>
+          val free = s.asInstanceOf[Free]
+          val base = CFree(CVar(free.v.name)).asInstanceOf[CStatement]
+          val stmt = (1 until sz).foldLeft(base)((acc, n) => CSeqComp(CFree(CVar(free.v.name), n), acc))
+          CSeqComp(stmt, traverse(subgoals.head)).simplify
+        case PrependFromSketch(s) => ???
+        case Append(s) => ???
         case MakeSkip =>
           CSkip
         case MakeError =>
@@ -165,31 +170,6 @@ object Translator {
       case None =>
         CError
     }
-  }
-
-  private def runStmt(el: Statement, goal: Goal): CStatement = el match {
-    case Skip => CSkip
-    case Hole => ???
-    case Error => ???
-    case Magic => ???
-    case Malloc(to, tpe, sz) =>
-      CMalloc(CVar(to.name), runSSLType(tpe), sz)
-    case Free(v) =>
-      val Block(_, size) = FreeRule.findTargetHeaplets(goal).get._1
-      (1 until size)
-          .foldLeft(CFree(CVar(v.name)).asInstanceOf[CStatement])((acc, n) => CSeqComp(CFree(CVar(v.name), n), acc))
-    case Load(to, tpe, from, offset) =>
-      CLoad(CVar(to.name), runSSLType(tpe), CVar(from.name), offset)
-    case Store(to, offset, expr) =>
-      CStore(CVar(to.name), offset, runExpr(expr))
-    case Call(to, fun, args) =>
-      CCall(to.map { case (v, t) => (CVar(v.name), runSSLType(t)) }, CVar(fun.name), args.map(runExpr))
-    case SeqComp(s1, s2) =>
-      CSeqComp(runStmt(s1, goal), runStmt(s2, goal))
-    case If(cond, tb, eb) =>
-      CIf(runExpr(cond), runStmt(tb, goal), runStmt(eb, goal))
-    case Guarded(cond, body) =>
-      CGuarded(runExpr(cond), runStmt(body, goal))
   }
 
   private def runParam(el: (SSLType, Var)): (CoqType, CVar) = el match {

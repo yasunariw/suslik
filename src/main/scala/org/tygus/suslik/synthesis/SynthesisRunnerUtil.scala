@@ -114,7 +114,7 @@ trait SynthesisRunnerUtil {
     SynStatUtil.log(testName, delta, params, spec, sresult)
 
     sresult match {
-      case Some((rr, stats)) =>
+      case Some((rr, stats, _)) =>
         val result = rr.pp
         if (params.printStats) {
           testPrintln(s"\n[$testName]:", Console.MAGENTA)

@@ -29,7 +29,7 @@ trait Synthesis extends SepLogicUtils {
 
   val memo = new Memoization
 
-  def synthesizeProc(spec: FunSpec, env: Environment, sketch: Statement): Option[(Procedure, SynStats)] = {
+  def synthesizeProc(spec: FunSpec, env: Environment, sketch: Statement): Option[(Procedure, SynStats, Trace)] = {
     implicit val config: SynConfig = env.config
     // Cleanup the memo table
     memo.cleanup()
@@ -43,14 +43,9 @@ trait Synthesis extends SepLogicUtils {
       synthesize(goal, config.startingDepth, trace.root.get)(stats = stats, rules = nextRules(goal, config.startingDepth)) match {
         case Some(body) =>
           trace.root.get.stmt = Some(body)
-
           val prunedTrace = trace.pruneInvalidRuleApps
-          testPrintln(Translator.runFunSpecFromTrace(prunedTrace).pp)
           val proc = Procedure(name, tp, formals, body)
-          testPrintln(prunedTrace.pp)
-          testPrintln(Translator.runProcedure(proc, prunedTrace).ppp)
-          testPrintln(Translator.runProofFromTrace(prunedTrace, env.predicates).pp)
-          Some((proc, stats))
+          Some((proc, stats, prunedTrace))
         case None =>
           printlnErr(s"Deductive synthesis failed for the goal\n ${goal.pp},\n depth = ${config.startingDepth}.")
           None
