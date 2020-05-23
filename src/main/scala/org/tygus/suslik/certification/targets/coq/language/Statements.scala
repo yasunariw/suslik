@@ -1,4 +1,4 @@
-package org.tygus.suslik.coq.language
+package org.tygus.suslik.certification.targets.coq.language
 
 import org.tygus.suslik.util.StringUtil._
 

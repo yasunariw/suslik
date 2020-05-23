@@ -1,9 +1,9 @@
-package org.tygus.suslik.coq.translation
+package org.tygus.suslik.certification.targets.coq.translation
 
-import org.tygus.suslik.coq.language.Expressions._
-import org.tygus.suslik.coq.language.Statements._
-import org.tygus.suslik.coq.language._
-import org.tygus.suslik.coq.logic._
+import org.tygus.suslik.certification.targets.coq.language.Expressions._
+import org.tygus.suslik.certification.targets.coq.language.Statements._
+import org.tygus.suslik.certification.targets.coq.language._
+import org.tygus.suslik.certification.targets.coq.logic._
 import org.tygus.suslik.language._
 import org.tygus.suslik.logic._
 import org.tygus.suslik.language.Expressions._

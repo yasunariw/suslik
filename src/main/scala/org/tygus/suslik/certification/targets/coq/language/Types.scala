@@ -1,6 +1,6 @@
-package org.tygus.suslik.coq.language
+package org.tygus.suslik.certification.targets.coq.language
 
-import org.tygus.suslik.coq.logic.ProofContextItem
+import org.tygus.suslik.certification.targets.coq.logic.ProofContextItem
 
 sealed abstract class CoqType extends PrettyPrinting with ProofContextItem
 

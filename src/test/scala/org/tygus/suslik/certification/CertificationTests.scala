@@ -1,4 +1,4 @@
-package org.tygus.suslik.coq
+package org.tygus.suslik.certification
 
 import org.scalatest.{FunSpec, Matchers}
 import org.tygus.suslik.synthesis.{SynConfig, Synthesis, SynthesisRunnerUtil, defaultConfig}

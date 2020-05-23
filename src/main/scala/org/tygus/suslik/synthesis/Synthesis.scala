@@ -1,7 +1,7 @@
 package org.tygus.suslik.synthesis
 
 import org.tygus.suslik.Memoization
-import org.tygus.suslik.certification.translation.Translator
+import org.tygus.suslik.certification.targets.coq.translation.Translator
 import org.tygus.suslik.language.Statements._
 import org.tygus.suslik.logic.Specifications._
 import org.tygus.suslik.logic._

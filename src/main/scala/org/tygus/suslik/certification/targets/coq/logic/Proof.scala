@@ -1,9 +1,7 @@
-package org.tygus.suslik.coq.logic
+package org.tygus.suslik.certification.targets.coq.logic
 
-import org.tygus.suslik.coq.language.Expressions._
-import org.tygus.suslik.coq.language.{CAssertion, CFunSpec, CPredicateEnv, CoqType, PrettyPrinting}
-import org.tygus.suslik.language.SSLType
-import org.tygus.suslik.util.StringUtil.mkSpaces
+import org.tygus.suslik.certification.targets.coq.language.Expressions._
+import org.tygus.suslik.certification.targets.coq.language.{CAssertion, CFunSpec, CPredicateEnv, CoqType, PrettyPrinting}
 
 trait ProofContextItem
 

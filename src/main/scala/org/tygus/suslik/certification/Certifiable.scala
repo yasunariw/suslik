@@ -1,5 +1,6 @@
-package org.tygus.suslik.coq.translation
+package org.tygus.suslik.certification
 
+import org.tygus.suslik.certification.targets.coq.translation.Translator
 import org.tygus.suslik.language.Statements.Procedure
 import org.tygus.suslik.logic.Environment
 import org.tygus.suslik.synthesis.Trace
