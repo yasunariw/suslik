@@ -30,6 +30,7 @@ case class SynConfig(
                       logToFile: Boolean        = true,
                       memoization: Boolean        = true,
                       timeOut: Long             = DEFAULT_TIMEOUT*100,
+                      certify: Boolean          = false,
                       inputFormat: InputFormat = dotSyn
                     ) extends PrettyPrinting {
 
@@ -40,7 +41,8 @@ case class SynConfig(
       (if (phased == defaultConfig.phased) Nil else List(s"phased = $phased")) ++
       (if (invert == defaultConfig.invert) Nil else List(s"invert = $invert")) ++
       (if (fail == defaultConfig.fail) Nil else List(s"fail = $fail")) ++
-      (if (commute == defaultConfig.commute) Nil else List(s"commute = $commute"))
+      (if (commute == defaultConfig.commute) Nil else List(s"commute = $commute")) ++
+      (if (certify == defaultConfig.certify) Nil else List(s"certify = $certify"))
       ).mkString(", ")
 }
 

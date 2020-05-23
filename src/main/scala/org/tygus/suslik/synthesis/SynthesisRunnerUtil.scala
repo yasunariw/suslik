@@ -2,6 +2,7 @@ package org.tygus.suslik.synthesis
 
 import java.io.File
 
+import org.tygus.suslik.coq.translation.Certifiable
 import org.tygus.suslik.logic.Resolver._
 import org.tygus.suslik.parsing.SSLParser
 import org.tygus.suslik.util.{SynLogLevels, SynLogging, SynStatUtil}
@@ -12,7 +13,7 @@ import scala.io.Source
   * @author Nadia Polikarpova, Ilya Sergey
   */
 
-trait SynthesisRunnerUtil {
+trait SynthesisRunnerUtil extends Certifiable {
 
   implicit val log : SynLogging = SynLogLevels.Test
   import log._
@@ -114,7 +115,11 @@ trait SynthesisRunnerUtil {
     SynStatUtil.log(testName, delta, params, spec, sresult)
 
     sresult match {
-      case Some((rr, stats, _)) =>
+      case Some((rr, stats, trace)) =>
+        if (params.certify) {
+          certify(rr, trace, env)
+        }
+
         val result = rr.pp
         if (params.printStats) {
           testPrintln(s"\n[$testName]:", Console.MAGENTA)
