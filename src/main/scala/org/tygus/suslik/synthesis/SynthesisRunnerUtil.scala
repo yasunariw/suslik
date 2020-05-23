@@ -2,7 +2,7 @@ package org.tygus.suslik.synthesis
 
 import java.io.File
 
-import org.tygus.suslik.coq.translation.Certifiable
+import org.tygus.suslik.certification.translation.Certifiable
 import org.tygus.suslik.logic.Resolver._
 import org.tygus.suslik.parsing.SSLParser
 import org.tygus.suslik.util.{SynLogLevels, SynLogging, SynStatUtil}
