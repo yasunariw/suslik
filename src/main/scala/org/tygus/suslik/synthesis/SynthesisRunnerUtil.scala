@@ -1,8 +1,8 @@
 package org.tygus.suslik.synthesis
 
-import java.io.File
+import java.io.{File, PrintWriter}
+import java.nio.file.Paths
 
-import org.tygus.suslik.certification.Certifiable
 import org.tygus.suslik.logic.Resolver._
 import org.tygus.suslik.parsing.SSLParser
 import org.tygus.suslik.util.{SynLogLevels, SynLogging, SynStatUtil}
@@ -13,7 +13,7 @@ import scala.io.Source
   * @author Nadia Polikarpova, Ilya Sergey
   */
 
-trait SynthesisRunnerUtil extends Certifiable {
+trait SynthesisRunnerUtil {
 
   implicit val log : SynLogging = SynLogLevels.Test
   import log._
@@ -116,10 +116,6 @@ trait SynthesisRunnerUtil extends Certifiable {
 
     sresult match {
       case Some((rr, stats, trace)) =>
-        if (params.certify) {
-          certify(rr, trace, env)
-        }
-
         val result = rr.pp
         if (params.printStats) {
           testPrintln(s"\n[$testName]:", Console.MAGENTA)
@@ -144,6 +140,23 @@ trait SynthesisRunnerUtil extends Certifiable {
           val res = result.trim.lines.toList
           if (params.assertSuccess && res != tt) {
             throw SynthesisException(s"\nThe expected output\n$tt\ndoesn't match the result:\n$res")
+          }
+        }
+
+        if (params.certTarget != null) {
+          val certTarget = params.certTarget
+          val targetName = certTarget.name
+          val certificate = certTarget.certify(rr, trace, env)
+          if (params.printCertTrace) {
+            testPrintln(trace.pp)
+          }
+          if (params.certDest == null) {
+            testPrintln(s"\n$targetName certificate:", Console.MAGENTA)
+            testPrintln(certificate.body)
+          } else {
+            val path = Paths.get(params.certDest.getCanonicalPath, certificate.fileName).toFile
+            new PrintWriter(path) { write(certificate.body); close() }
+            testPrintln(s"\n$targetName certificate exported to $path", Console.MAGENTA)
           }
         }
       case None =>
